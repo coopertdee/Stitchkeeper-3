@@ -3,10 +3,2243 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>StitchKeeper</title>
+    <title>StitchKeeper 🧵</title>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { background: #f7f3f0; }
+    </style>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <script type="text/babel" data-presets="react">
+const { useState, useRef, useCallback } = React;
+
+
+const STORAGE_KEY = "stitchkeeper_data";
+const STATUS_META = [
+  { label:"In Progress",  color:"#2e7d32", bg:"#e8f5e9", emoji:"🪡" },
+  { label:"Kitted",       color:"#6a5078", bg:"#f3edf7", emoji:"🧺" },
+  { label:"Need to FFO",  color:"#b8520a", bg:"#fff3e0", emoji:"✂️" },
+  { label:"Completed",    color:"#1565c0", bg:"#e3f2fd", emoji:"🎉" },
+  { label:"On Hold",      color:"#e65100", bg:"#fbe9e7", emoji:"⏸️" },
+  { label:"Frogged",      color:"#6a1b9a", bg:"#f3e5f5", emoji:"🐸" },
+];
+
+const defaultData = { projects: [], charts: [], fabrics: [], flosses: [], flossBrands: [], fabricCounts: [], chartDesigners: [], wishlist: [], shoppingList: [], notions: [], notionCategories: [] };
+
+// ---- Icons ----
+const Icon = ({ name, size = 18 }) => {
+  const icons = {
+    needle:   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L8 22M12 2L16 22M12 2C12 2 9 6 9 10s3 4 3 4 3-1 3-4-3-8-3-8z"/><line x1="8" y1="22" x2="16" y2="22"/></svg>,
+    chart:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>,
+    fabric:   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3h18v18H3zM3 9h18M3 15h18M9 3v18M15 3v18"/></svg>,
+    thread:   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M12 3c0 0-4 4-4 9s4 9 4 9"/><path d="M3 12h18"/></svg>,
+    wishlist: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg>,
+    calc:     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="14" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="10" y2="18"/><line x1="14" y1="18" x2="16" y2="18"/></svg>,
+    plus:     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+    trash:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>,
+    edit:     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+    close:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+    gift:     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="8" width="18" height="4"/><rect x="3" y="12" width="18" height="9"/><path d="M12 8v13"/><path d="M12 8C12 8 9 4 7 4s-3 2-1 4 6 0 6 0z"/><path d="M12 8C12 8 15 4 17 4s3 2 1 4-6 0-6 0z"/></svg>,
+    upload:   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>,
+    pdf:      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+    image:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>,
+    eye:      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
+    ruler:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 12h20M2 12l4-4M2 12l4 4M22 12l-4-4M22 12l-4 4M7 12v2M12 12v3M17 12v2"/></svg>,
+    notions:  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a5 5 0 0 1 5 5v3H7V7a5 5 0 0 1 5-5z"/><rect x="3" y="10" width="18" height="12" rx="2"/><line x1="12" y1="14" x2="12" y2="18"/></svg>,
+    cart:     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>,
+    check:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>,
+    back:     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>,
+    warning:  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+    progress: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>,
+    email:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
+    share:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>,
+    print:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>,
+    reset:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>,
+  };
+  return icons[name] || null;
+};
+
+// ---- Storage ----
+function useLocalData() {
+  const [data, setData] = useState(() => {
+    try { const s = localStorage.getItem(STORAGE_KEY); return s ? JSON.parse(s) : defaultData; }
+    catch { return defaultData; }
+  });
+  const save = (d) => { setData(d); try { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); } catch {} };
+  return [data, save];
+}
+
+// ---- Shared UI ----
+function Modal({ title, onClose, children, wide = false }) {
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(40,20,50,0.6)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}} onClick={onClose}>
+      <div style={{background:"#fefcfa",borderRadius:"1rem",padding:"2rem",maxWidth:wide?780:600,width:"100%",maxHeight:"92vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)",border:"2px solid #c4a8d4"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.5rem"}}>
+          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"1.4rem",color:"#4a3550",margin:0}}>{title}</h2>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:"#8a6e9a",padding:"0.25rem"}}><Icon name="close"/></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children, span = false }) {
+  return (
+    <div style={{marginBottom:"1rem",gridColumn:span?"1/-1":undefined}}>
+      <label style={{display:"block",fontFamily:"'Lora',serif",fontSize:"0.78rem",color:"#8a6e9a",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"0.35rem"}}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+const inputStyle = {width:"100%",padding:"0.6rem 0.8rem",border:"1.5px solid #d4c2e0",borderRadius:"0.5rem",fontFamily:"'Lora',serif",fontSize:"0.95rem",color:"#2d1f3a",background:"#fefcfa",outline:"none",boxSizing:"border-box"};
+const textareaStyle = {...inputStyle, minHeight:72, resize:"vertical"};
+const selectStyle = {...inputStyle};
+
+function Btn({ children, onClick, variant="primary", small=false, style:s={} }) {
+  const base = {fontFamily:"'Lora',serif",fontSize:small?"0.78rem":"0.93rem",fontWeight:600,padding:small?"0.32rem 0.75rem":"0.62rem 1.3rem",borderRadius:"0.5rem",cursor:"pointer",border:"none",display:"inline-flex",alignItems:"center",gap:"0.4rem",transition:"all 0.15s",...s};
+  const v = {primary:{background:"linear-gradient(135deg,#7c5c8a,#a0607a)",color:"#fff",border:"none"},secondary:{background:"#eddff5",color:"#4a3550",border:"1px solid #d4c2e0"},danger:{background:"#c0392b",color:"#fff"},ghost:{background:"transparent",color:"#8a6e9a",border:"1.5px solid #d4c2e0"}};
+  return <button onClick={onClick} style={{...base,...v[variant]}}>{children}</button>;
+}
+
+function Badge({ children, color="#7c5c8a" }) {
+  return <span style={{background:color+"22",color,fontSize:"0.72rem",fontFamily:"'Lora',serif",padding:"0.2rem 0.6rem",borderRadius:"999px",fontWeight:600,border:`1px solid ${color}44`}}>{children}</span>;
+}
+
+function SearchBar({ value, onChange }) {
+  return (
+    <div style={{position:"relative",flex:1,minWidth:160}}>
+      <input value={value} onChange={e=>onChange(e.target.value)} placeholder="Search..." style={{...inputStyle,paddingLeft:"2rem"}}/>
+      <svg style={{position:"absolute",left:"0.65rem",top:"50%",transform:"translateY(-50%)",color:"#8a6e9a"}} width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </div>
+  );
+}
+
+function EmptyState({ emoji, title, sub }) {
+  return (
+    <div style={{textAlign:"center",padding:"4rem 2rem",color:"#8a6e9a"}}>
+      <div style={{fontSize:"3rem",marginBottom:"1rem"}}>{emoji}</div>
+      <div style={{fontFamily:"'Playfair Display',serif",fontSize:"1.2rem",marginBottom:"0.5rem",color:"#4a3550"}}>{title}</div>
+      <div style={{fontSize:"0.9rem"}}>{sub}</div>
+    </div>
+  );
+}
+
+function toBase64(file) {
+  return new Promise((res,rej) => { const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+}
+
+// ===== FABRIC CALCULATOR =====
+function FabricCalculator() {
+  const swRef = useRef(null);
+  const shRef = useRef(null);
+  const borderRef = useRef(null);
+  const customCtRef = useRef(null);
+  const [selectedCt, setSelectedCt] = useState("28");
+  const [usingCustom, setUsingCustom] = useState(false);
+  const [stitchType, setStitchType] = useState("over1");
+  const [result, setResult] = useState(null);
+
+  const COUNTS = ["10","14","16","18","20","22","25","28","32","36","40"];
+  const AIDA_COUNTS = new Set(["10","14","16","18","20"]);
+
+  // Convert decimal inches to whole number + nearest 1/8" fraction string
+  const toFraction = (val) => {
+    const whole = Math.floor(val);
+    const dec = val - whole;
+    const eighths = Math.round(dec * 8);
+    if (eighths === 0) return `${whole}"`;
+    if (eighths === 8) return `${whole + 1}"`;
+    const fracs = {1:"⅛", 2:"¼", 3:"⅜", 4:"½", 5:"⅝", 6:"¾", 7:"⅞"};
+    return whole > 0 ? `${whole} ${fracs[eighths]}"` : `${fracs[eighths]}"`;
+  };
+
+  const iStyle = {
+    display:"block", width:"100%", padding:"0.65rem 0.9rem",
+    border:"1.5px solid #d4c2e0", borderRadius:"0.5rem",
+    fontFamily:"Lora, serif", fontSize:"1rem",
+    color:"#2d1f3a", background:"#fefcfa",
+    outline:"none", boxSizing:"border-box", marginTop:"0.35rem"
+  };
+  const lStyle = {
+    display:"block", fontFamily:"Lora, serif", fontSize:"0.75rem",
+    color:"#8a6e9a", textTransform:"uppercase", letterSpacing:"0.08em"
+  };
+  const stepBadge = {
+    width:26, height:26, background:"linear-gradient(135deg,#7c5c8a,#c4758a)",
+    color:"#fff", borderRadius:"50%", display:"inline-flex",
+    alignItems:"center", justifyContent:"center",
+    fontSize:"0.75rem", fontWeight:700, flexShrink:0
+  };
+
+  const handleCalculate = () => {
+    const sw = swRef.current?.value || "";
+    const sh = shRef.current?.value || "";
+    const border = borderRef.current?.value || "0";
+    const customCt = customCtRef.current?.value || "";
+    const rawCt = usingCustom && customCt.trim() ? customCt : selectedCt;
+    const w = parseFloat(sw), h = parseFloat(sh);
+    const rawC = parseFloat(rawCt), b = parseFloat(border) || 0;
+    if (!w || !h || !rawC) { alert("Please fill in Width, Height, and a fabric count."); return; }
+
+    // Use manual stitchType selection (auto-set when count picked, but user can override)
+    const effectiveCt = stitchType === "over1" ? rawC : rawC / 2;
+
+    const dw = w / effectiveCt;
+    const dh = h / effectiveCt;
+    const tw = dw + b * 2;
+    const th = dh + b * 2;
+
+    setResult({
+      sw, sh, border, rawCt, effectiveCt: effectiveCt.toFixed(1), stitchType,
+      dw: dw.toFixed(3), dh: dh.toFixed(3),
+      tw: tw.toFixed(3), th: th.toFixed(3),
+      dwFrac: toFraction(dw), dhFrac: toFraction(dh),
+      twFrac: toFraction(tw), thFrac: toFraction(th),
+      dwcm: (dw*2.54).toFixed(1), dhcm: (dh*2.54).toFixed(1),
+      twcm: (tw*2.54).toFixed(1), thcm: (th*2.54).toFixed(1),
+    });
+  };
+
+  const handleReset = () => {
+    if (swRef.current) swRef.current.value = "";
+    if (shRef.current) shRef.current.value = "";
+    if (borderRef.current) borderRef.current.value = "3";
+    if (customCtRef.current) customCtRef.current.value = "";
+    setSelectedCt("28");
+    setUsingCustom(false);
+    setStitchType("over1");
+    setResult(null);
+  };
+
+  return (
+    <div>
+      <div style={{background:"linear-gradient(135deg,#4a3550,#7c5c8a)",borderRadius:"1rem",padding:"1.5rem 2rem",marginBottom:"1.5rem",color:"#f3edf8",display:"flex",gap:"1rem",alignItems:"center"}}>
+        <div style={{width:46,height:46,background:"#c4a8d4",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <Icon name="ruler" size={22}/>
+        </div>
+        <div>
+          <h2 style={{margin:0,fontFamily:"Playfair Display,serif",fontSize:"1.3rem"}}>Fabric Size Calculator</h2>
+          <div style={{fontSize:"0.8rem",color:"#dcc8f0",marginTop:"0.2rem"}}>Enter stitch count, fabric count, stitch type, and border — results shown in inches with fractions</div>
+        </div>
+      </div>
+
+      <div style={{background:"#fefcfa",border:"1.5px solid #e2d4e8",borderRadius:"1rem",padding:"1.75rem",marginBottom:"1.25rem"}}>
+
+        {/* Step 1 — stitch count */}
+        <div style={{marginBottom:"1.5rem"}}>
+          <div style={{fontFamily:"Playfair Display,serif",fontSize:"1rem",color:"#4a3550",marginBottom:"1rem",display:"flex",alignItems:"center",gap:"0.6rem"}}>
+            <span style={stepBadge}>1</span> Design Stitch Count
+          </div>
+          <div style={{display:"flex",gap:"1rem",flexWrap:"wrap"}}>
+            <div style={{flex:"1 1 140px"}}>
+              <label style={lStyle}>Width (stitches)</label>
+              <input ref={swRef} type="text" inputMode="decimal" defaultValue="" placeholder="e.g. 127" style={iStyle}/>
+            </div>
+            <div style={{flex:"1 1 140px"}}>
+              <label style={lStyle}>Height (stitches)</label>
+              <input ref={shRef} type="text" inputMode="decimal" defaultValue="" placeholder="e.g. 127" style={iStyle}/>
+            </div>
+          </div>
+        </div>
+
+        <div style={{borderTop:"1px dashed #ddc8ea",marginBottom:"1.5rem"}}/>
+
+        {/* Step 2 — fabric count */}
+        <div style={{marginBottom:"1.5rem"}}>
+          <div style={{fontFamily:"Playfair Display,serif",fontSize:"1rem",color:"#4a3550",marginBottom:"0.85rem",display:"flex",alignItems:"center",gap:"0.6rem"}}>
+            <span style={stepBadge}>2</span> Fabric Count
+          </div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:"0.4rem",marginBottom:"1rem"}}>
+            {COUNTS.map(c=>(
+              <button key={c}
+                onClick={()=>{ setSelectedCt(c); setUsingCustom(false); if(customCtRef.current) customCtRef.current.value=""; setStitchType(AIDA_COUNTS.has(c) ? "over1" : "over2"); }}
+                style={{padding:"0.3rem 0.8rem",borderRadius:"999px",cursor:"pointer",
+                  fontFamily:"Lora,serif",fontSize:"0.8rem",fontWeight:600,transition:"all 0.12s",
+                  border: !usingCustom && selectedCt===c ? "1.5px solid #7c5c8a" : "1.5px solid #d4c2e0",
+                  background: !usingCustom && selectedCt===c ? "#7c5c8a" : "#fefcfa",
+                  color: !usingCustom && selectedCt===c ? "#fff" : "#5a4060"}}>
+                {c}ct
+              </button>
+            ))}
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:"1.5rem",flexWrap:"wrap"}}>
+            <div style={{flex:"0 0 200px"}}>
+              <label style={lStyle}>Or type a custom count</label>
+              <input ref={customCtRef} type="text" inputMode="decimal"
+                defaultValue="" placeholder="e.g. 24, 30, 55…"
+                onFocus={()=>setUsingCustom(true)}
+                style={{...iStyle, borderColor: usingCustom ? "#7c5c8a" : "#d4c2e0",
+                  boxShadow: usingCustom ? "0 0 0 3px rgba(124,92,138,0.18)" : "none"}}
+              />
+            </div>
+            <div style={{fontSize:"0.82rem",fontFamily:"Lora,serif",color:"#8a6e9a",fontStyle:"italic",paddingTop:"1.1rem"}}>
+              Active: <strong style={{color:"#7c5c8a",fontStyle:"normal"}}>{usingCustom ? "custom" : selectedCt+"ct"}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div style={{borderTop:"1px dashed #ddc8ea",marginBottom:"1.5rem"}}/>
+
+        {/* Step 3 — stitch type */}
+        <div style={{marginBottom:"1.5rem"}}>
+          <div style={{fontFamily:"Playfair Display,serif",fontSize:"1rem",color:"#4a3550",marginBottom:"0.85rem",display:"flex",alignItems:"center",gap:"0.6rem"}}>
+            <span style={stepBadge}>3</span> Stitch Type
+            <span style={{fontSize:"0.75rem",fontFamily:"Lora,serif",color:"#8a6e9a",fontWeight:400,fontStyle:"italic"}}>— auto-set by count, but you can override</span>
+          </div>
+          <div style={{display:"flex",gap:"0.75rem",flexWrap:"wrap"}}>
+            {[
+              {val:"over1", label:"Over 1", sub:"Aida — 10, 14, 16, 18, 20ct"},
+              {val:"over2", label:"Over 2", sub:"Linen & evenweave — 22ct and up"},
+            ].map(opt=>(
+              <div key={opt.val} onClick={()=>setStitchType(opt.val)}
+                style={{flex:"1 1 180px",padding:"0.85rem 1rem",borderRadius:"0.75rem",cursor:"pointer",transition:"all 0.15s",
+                  border: stitchType===opt.val ? "2px solid #7c5c8a" : "2px solid #e2d4e8",
+                  background: stitchType===opt.val ? "#f0e8f8" : "#fefcfa"}}>
+                <div style={{fontFamily:"Lora,serif",fontWeight:700,fontSize:"0.95rem",color: stitchType===opt.val ? "#7c5c8a" : "#2d1f3a"}}>{opt.label}</div>
+                <div style={{fontSize:"0.78rem",color:"#8a6e9a",marginTop:"0.2rem"}}>{opt.sub}</div>
+              </div>
+            ))}
+          </div>
+          {stitchType === "over2" && (
+            <div style={{marginTop:"0.75rem",fontSize:"0.8rem",fontFamily:"Lora,serif",color:"#7c5c8a",background:"#f0e8f8",padding:"0.6rem 0.9rem",borderRadius:"0.5rem"}}>
+              💡 Over two halves the effective count — e.g. 28ct ÷ 2 = <strong>14 stitches per inch</strong>
+            </div>
+          )}
+        </div>
+
+        <div style={{borderTop:"1px dashed #ddc8ea",marginBottom:"1.5rem"}}/>
+
+        {/* Step 4 — border */}
+        <div style={{marginBottom:"1.5rem"}}>
+          <div style={{fontFamily:"Playfair Display,serif",fontSize:"1rem",color:"#4a3550",marginBottom:"0.85rem",display:"flex",alignItems:"center",gap:"0.6rem"}}>
+            <span style={stepBadge}>4</span> Border / Margin
+          </div>
+          <div style={{display:"flex",gap:"1.5rem",alignItems:"flex-start",flexWrap:"wrap"}}>
+            <div style={{flex:"0 0 200px"}}>
+              <label style={lStyle}>Border on each side (inches)</label>
+              <input ref={borderRef} type="text" inputMode="decimal" defaultValue="3" placeholder="e.g. 3" style={iStyle}/>
+            </div>
+            <div style={{paddingTop:"1.85rem",fontSize:"0.8rem",fontFamily:"Lora,serif",color:"#8a6e9a",fontStyle:"italic",lineHeight:1.6}}>
+              💡 Most stitchers allow 3–4 inches on each side for framing or finishing.
+            </div>
+          </div>
+        </div>
+
+        <div style={{display:"flex",gap:"0.75rem",justifyContent:"flex-end"}}>
+          <button onClick={handleReset} style={{fontFamily:"Lora,serif",fontSize:"0.9rem",fontWeight:600,padding:"0.6rem 1.2rem",borderRadius:"0.5rem",cursor:"pointer",background:"transparent",color:"#8a6e9a",border:"1.5px solid #d4c2e0",display:"inline-flex",alignItems:"center",gap:"0.4rem"}}>
+            <Icon name="reset" size={14}/> Reset
+          </button>
+          <button onClick={handleCalculate} style={{fontFamily:"Lora,serif",fontSize:"0.9rem",fontWeight:600,padding:"0.6rem 1.2rem",borderRadius:"0.5rem",cursor:"pointer",background:"linear-gradient(135deg,#7c5c8a,#a0607a)",color:"#fff",border:"none",display:"inline-flex",alignItems:"center",gap:"0.4rem"}}>
+            <Icon name="calc" size={14}/> Calculate Fabric Size
+          </button>
+        </div>
+      </div>
+
+      {result && (
+        <div style={{background:"linear-gradient(135deg,#f5eef8,#ecddf5)",border:"2px solid #c4a8d4",borderRadius:"1rem",padding:"1.5rem",animation:"fadeIn 0.3s ease"}}>
+          <div style={{fontFamily:"Playfair Display,serif",fontSize:"1.1rem",color:"#4a3550",marginBottom:"1.25rem",display:"flex",alignItems:"center",gap:"0.5rem"}}>
+            📐 Your Results
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"1rem",marginBottom:"1rem"}}>
+            <div style={{background:"#fefcfa",borderRadius:"0.75rem",padding:"1.1rem",border:"1.5px solid #e2d4e8"}}>
+              <div style={{fontSize:"0.72rem",fontFamily:"Lora,serif",color:"#8a6e9a",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"0.4rem"}}>Design Area Only</div>
+              <div style={{fontFamily:"Playfair Display,serif",fontSize:"1.6rem",color:"#2d1f3a",fontWeight:700,lineHeight:1.2}}>{result.dwFrac} × {result.dhFrac}</div>
+              <div style={{fontSize:"0.8rem",fontFamily:"Lora,serif",color:"#8a6e9a",marginTop:"0.3rem"}}>{result.dwcm} × {result.dhcm} cm</div>
+            </div>
+            <div style={{background:"linear-gradient(135deg,#7c5c8a,#a0607a)",borderRadius:"0.75rem",padding:"1.1rem"}}>
+              <div style={{fontSize:"0.72rem",fontFamily:"Lora,serif",color:"#dcc8f0",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"0.4rem"}}>✂️ Cut Size (with {result.border}" border)</div>
+              <div style={{fontFamily:"Playfair Display,serif",fontSize:"1.6rem",color:"#fff",fontWeight:700,lineHeight:1.2}}>{result.twFrac} × {result.thFrac}</div>
+              <div style={{fontSize:"0.8rem",fontFamily:"Lora,serif",color:"#dcc8f0",marginTop:"0.3rem"}}>{result.twcm} × {result.thcm} cm</div>
+            </div>
+          </div>
+          <div style={{background:"rgba(255,255,255,0.65)",borderRadius:"0.6rem",padding:"0.85rem 1rem",fontSize:"0.82rem",fontFamily:"Lora,serif",color:"#5a4060",lineHeight:1.9}}>
+            <strong style={{color:"#4a3550"}}>How it's calculated ({result.stitchType === "over2" ? "over two" : "over one"}):</strong><br/>
+            {result.stitchType === "over2"
+              ? <span>Effective count: {result.rawCt}ct ÷ 2 = <strong>{result.effectiveCt} stitches/inch</strong><br/></span>
+              : <span>Effective count: <strong>{result.rawCt} stitches/inch</strong><br/></span>
+            }
+            Design: {result.sw} ÷ {result.effectiveCt} = <strong>{result.dwFrac}</strong> wide &nbsp;·&nbsp; {result.sh} ÷ {result.effectiveCt} = <strong>{result.dhFrac}</strong> tall<br/>
+            Cut size: add {result.border}" each side → <strong>{result.twFrac} × {result.thFrac}</strong>
+          </div>
+          <div style={{marginTop:"0.75rem",fontSize:"0.77rem",fontFamily:"Lora,serif",color:"#8a6e9a",fontStyle:"italic"}}>
+            Results rounded to nearest ⅛" — always add a little extra if in doubt! · Stitch type auto-detected: 10, 14, 16, 18 &amp; 20ct = Aida (over one); all others = evenweave (over two).
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ===== PROJECTS =====
+function ProjectForm({ initial={}, onSave, onClose }) {
+  const [f, setF] = useState({title:"",pattern:"",designer:"",fabric:"",fabricCount:"",flossColors:"",timeToStitch:"",dateStarted:"",dateEnded:"",isGift:false,giftFor:"",ideas:"",status:"In Progress",...initial});
+  const u = k => e => setF(p=>({...p,[k]:e.target.type==="checkbox"?e.target.checked:e.target.value}));
+  return (
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 1rem"}}>
+        <Field label="Project Title" span><input style={inputStyle} value={f.title} onChange={u("title")} placeholder="e.g. Autumn Garden Sampler"/></Field>
+        <Field label="Pattern / Chart Name"><input style={inputStyle} value={f.pattern} onChange={u("pattern")}/></Field>
+        <Field label="Designer"><input style={inputStyle} value={f.designer} onChange={u("designer")} placeholder="e.g. Mirabilia Designs"/></Field>
+        <Field label="Status">
+          <select style={selectStyle} value={f.status} onChange={u("status")}>
+            {["In Progress","Kitted","Need to FFO","Completed","On Hold","Frogged"].map(s=><option key={s}>{s}</option>)}
+          </select>
+        </Field>
+        <Field label="Fabric Type"><input style={inputStyle} value={f.fabric} onChange={u("fabric")} placeholder="e.g. Evenweave, Linen, Aida"/></Field>
+        <Field label="Fabric Count"><input style={inputStyle} value={f.fabricCount} onChange={u("fabricCount")} placeholder="e.g. 28ct"/></Field>
+        <Field label="Floss Colors" span><textarea style={{...textareaStyle, minHeight:130}} value={f.flossColors} onChange={u("flossColors")} placeholder="e.g. DMC 321, 433, blanc, 3865, 310...&#10;One color per line or comma-separated — as many as you need!"/></Field>
+        <Field label="Date Started"><input type="date" style={inputStyle} value={f.dateStarted} onChange={u("dateStarted")}/></Field>
+        <Field label="Date Ended"><input type="date" style={inputStyle} value={f.dateEnded} onChange={u("dateEnded")}/></Field>
+        <Field label="Time to Stitch"><input style={inputStyle} value={f.timeToStitch} onChange={u("timeToStitch")} placeholder="e.g. 40 hours"/></Field>
+        <div style={{gridColumn:"1/-1",display:"flex",alignItems:"center",gap:"0.5rem",marginBottom:"1rem"}}>
+          <input type="checkbox" id="gift" checked={f.isGift} onChange={u("isGift")} style={{width:16,height:16,accentColor:"#7c5c8a"}}/>
+          <label htmlFor="gift" style={{fontFamily:"'Lora',serif",color:"#4a3550",cursor:"pointer"}}>🎁 This is a gift</label>
+        </div>
+        {f.isGift && <Field label="Gift For" span><input style={inputStyle} value={f.giftFor} onChange={u("giftFor")}/></Field>}
+        <Field label="Ideas / FFO Notes" span><textarea style={textareaStyle} value={f.ideas} onChange={u("ideas")} placeholder="Finishing ideas, framing plans..."/></Field>
+      </div>
+      <div style={{display:"flex",gap:"0.75rem",justifyContent:"flex-end"}}>
+        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={()=>onSave(f)}>Save Project</Btn>
+      </div>
+    </div>
+  );
+}
+
+function ProgressModal({ p, onSave, onClose }) {
+  const [pct, setPct] = useState(p.progressPct||0);
+  const [logText, setLogText] = useState("");
+  const [hours, setHours] = useState("");
+  const log = p.progressLog||[];
+  const totalHours = log.reduce((s,e)=>s+(parseFloat(e.hours)||0),0);
+
+  const addEntry = () => {
+    if (!logText.trim() && !hours) return;
+    const entry = {
+      id: Math.random().toString(36).slice(2)+Date.now().toString(36),
+      date: new Date().toISOString().slice(0,10),
+      hours: hours||"",
+      note: logText.trim(),
+    };
+    onSave({...p, progressPct:pct, progressLog:[entry,...log]});
+    setLogText(""); setHours("");
+  };
+
+  return (
+    <div>
+      {/* Progress bar */}
+      <div style={{marginBottom:"1.25rem"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.4rem"}}>
+          <label style={{fontFamily:"'Lora',serif",fontSize:"0.78rem",color:"#8a6e9a",textTransform:"uppercase",letterSpacing:"0.08em"}}>Progress</label>
+          <span style={{fontFamily:"'Playfair Display',serif",fontSize:"1.2rem",color:"#4a3550",fontWeight:700}}>{pct}%</span>
+        </div>
+        <input type="range" min={0} max={100} value={pct} onChange={e=>setPct(Number(e.target.value))}
+          style={{width:"100%",accentColor:"#7c5c8a",height:6,cursor:"pointer"}}/>
+        <div style={{height:10,background:"#f0e8f8",borderRadius:"999px",overflow:"hidden",marginTop:"0.4rem"}}>
+          <div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#c4a8d4,#7c5c8a)",borderRadius:"999px",transition:"width 0.3s"}}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.72rem",color:"#b89ac8",marginTop:"0.2rem"}}>
+          <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+        </div>
+      </div>
+
+      {/* Quick % buttons */}
+      <div style={{display:"flex",gap:"0.4rem",flexWrap:"wrap",marginBottom:"1.25rem"}}>
+        {[0,10,25,50,75,90,100].map(v=>(
+          <button key={v} onClick={()=>setPct(v)}
+            style={{padding:"0.25rem 0.6rem",borderRadius:"999px",border:`1.5px solid ${pct===v?"#7c5c8a":"#e2d4e8"}`,background:pct===v?"#7c5c8a":"#fefcfa",color:pct===v?"#fff":"#6a5078",cursor:"pointer",fontFamily:"'Lora',serif",fontSize:"0.8rem",fontWeight:600,transition:"all 0.1s"}}>
+            {v}%
+          </button>
+        ))}
+      </div>
+
+      {/* Log entry */}
+      <div style={{background:"#f5eef8",borderRadius:"0.75rem",padding:"1rem",marginBottom:"1.25rem"}}>
+        <div style={{fontFamily:"'Lora',serif",fontSize:"0.78rem",color:"#8a6e9a",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"0.6rem"}}>Log a Stitch Session</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:"0.5rem",alignItems:"flex-start"}}>
+          <textarea value={logText} onChange={e=>setLogText(e.target.value)}
+            placeholder="e.g. Finished the border, started fill stitching on the sky…"
+            style={{...textareaStyle,minHeight:60,resize:"vertical"}}/>
+          <div style={{display:"flex",flexDirection:"column",gap:"0.4rem",minWidth:90}}>
+            <input value={hours} onChange={e=>setHours(e.target.value)} placeholder="Hours"
+              style={{...inputStyle,textAlign:"center",padding:"0.4rem 0.5rem",fontSize:"0.85rem"}}/>
+            <Btn small onClick={addEntry}>+ Log</Btn>
+          </div>
+        </div>
+      </div>
+
+      {/* Session log */}
+      {log.length>0 && (
+        <div style={{marginBottom:"1rem"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.5rem"}}>
+            <div style={{fontFamily:"'Lora',serif",fontSize:"0.78rem",color:"#8a6e9a",textTransform:"uppercase",letterSpacing:"0.08em"}}>Session History</div>
+            {totalHours>0 && <Badge color="#7c5c8a">{totalHours.toFixed(1)} hrs total</Badge>}
+          </div>
+          <div style={{maxHeight:220,overflowY:"auto",display:"flex",flexDirection:"column",gap:"0.4rem"}}>
+            {log.map(e=>(
+              <div key={e.id} style={{background:"#fefcfa",border:"1px solid #e2d4e8",borderRadius:"0.5rem",padding:"0.5rem 0.75rem",display:"flex",gap:"0.75rem",alignItems:"flex-start"}}>
+                <div style={{flexShrink:0,fontSize:"0.75rem",color:"#8a6e9a",fontFamily:"'Lora',serif",minWidth:72}}>{e.date}</div>
+                {e.hours && <div style={{flexShrink:0,background:"#e8d8f0",color:"#5a4060",borderRadius:"999px",padding:"0.05rem 0.5rem",fontSize:"0.74rem",fontFamily:"'Lora',serif",fontWeight:600}}>{e.hours}h</div>}
+                <div style={{fontSize:"0.83rem",fontFamily:"'Lora',serif",color:"#3d2a50",flex:1}}>{e.note||<span style={{color:"#b89ac8",fontStyle:"italic"}}>session logged</span>}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{display:"flex",gap:"0.75rem",justifyContent:"flex-end"}}>
+        <Btn variant="ghost" onClick={onClose}>Close</Btn>
+        <Btn onClick={()=>onSave({...p,progressPct:pct})}>Save Progress</Btn>
+      </div>
+    </div>
+  );
+}
+
+function ProjectCard({ p, onEdit, onDelete, onProgress }) {
+  const statusColor = {"In Progress":"#2e7d32","Kitted":"#6a5078","Need to FFO":"#b8520a","Completed":"#1565c0","On Hold":"#e65100","Frogged":"#6a1b9a"}[p.status]||"#7c5c8a";
+  const pct = p.progressPct||0;
+  const showBar = p.status==="In Progress" || (p.progressPct>0 && p.progressPct<100);
+  return (
+    <div style={{background:"#fefcfa",border:"1.5px solid #e2d4e8",borderRadius:"0.75rem",padding:"1.25rem",boxShadow:"0 2px 8px rgba(100,70,130,0.08)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"0.5rem"}}>
+        <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:"1.05rem",color:"#2d1f3a",margin:0,flex:1}}>{p.title||"Untitled"}</h3>
+        <div style={{display:"flex",gap:"0.4rem",marginLeft:"0.5rem"}}>
+          {p.isGift && <span title={`Gift for ${p.giftFor||"someone"}`} style={{color:"#8a6e9a"}}><Icon name="gift" size={14}/></span>}
+          <button title="Track Progress" onClick={()=>onProgress(p)} style={{background:"#f0e8f8",border:"1px solid #c4a8d4",borderRadius:"0.4rem",cursor:"pointer",color:"#7c5c8a",padding:"2px 7px",fontFamily:"'Lora',serif",fontSize:"0.72rem",fontWeight:600,display:"flex",alignItems:"center",gap:"3px"}}>📊 Progress</button>
+          <button onClick={()=>onEdit(p)} style={{background:"none",border:"none",cursor:"pointer",color:"#8a6e9a",padding:"2px"}}><Icon name="edit" size={14}/></button>
+          <button onClick={()=>onDelete(p.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#c0392b",padding:"2px"}}><Icon name="trash" size={14}/></button>
+        </div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:"0.5rem",flexWrap:"wrap",marginBottom:"0.4rem"}}>
+        <Badge color={statusColor}>{p.status}</Badge>
+        {pct>0 && <Badge color="#7c5c8a">{pct}% done</Badge>}
+        {(p.progressLog||[]).length>0 && <Badge color="#6a8f6a">{(p.progressLog||[]).length} session{(p.progressLog||[]).length!==1?"s":""}</Badge>}
+      </div>
+      {showBar && (
+        <div style={{height:6,background:"#f0e8f8",borderRadius:"999px",overflow:"hidden",margin:"0.5rem 0"}}>
+          <div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#c4a8d4,#7c5c8a)",borderRadius:"999px",transition:"width 0.3s"}}/>
+        </div>
+      )}
+      <div style={{marginTop:"0.5rem",display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.25rem 1rem"}}>
+        {[["Pattern",p.pattern],["Designer",p.designer],["Fabric",p.fabric],["Count",p.fabricCount],["Floss",p.flossColors,"1/-1"],["Started",p.dateStarted],["Finished",p.dateEnded],["Time",p.timeToStitch],p.isGift&&["Gift for",p.giftFor]].filter(Boolean).map(([l,v,gc])=>v?(
+          <div key={l} style={{fontSize:"0.82rem",fontFamily:"'Lora',serif",color:"#5a4060",gridColumn:gc}}><span style={{color:"#8a6e9a"}}>{l}: </span>{v}</div>
+        ):null)}
+      </div>
+      {p.ideas && <div style={{marginTop:"0.75rem",fontSize:"0.82rem",fontFamily:"'Lora',serif",color:"#6a5078",fontStyle:"italic",borderTop:"1px dashed #ddc8ea",paddingTop:"0.6rem"}}>{p.ideas}</div>}
+    </div>
+  );
+}
+
+// ===== CHARTS =====
+const SEASONS   = ["","Fall","Winter","Spring","Summer"];
+const HOLIDAYS  = ["","New Year","Valentine's Day","St. Patrick's Day","Easter","Memorial Day","July Fourth","Halloween","Thanksgiving","Christmas","Hanukkah","Other"];
+const THEMES    = ["","Patriotic","Everyday","Beach","Back to School","Bees","Berries","Farmhouse","Religious","Children","Chickens","Cottages","Houses","Other"];
+
+function DesignerForm({ initial={}, onSave, onClose }) {
+  const [f,setF] = useState({name:"",website:"",notes:"",...initial});
+  const u = k => e => setF(p=>({...p,[k]:e.target.value}));
+  return (
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 1rem"}}>
+        <Field label="Designer Name" span><input style={inputStyle} value={f.name} onChange={u("name")} placeholder="e.g. Mirabilia Designs"/></Field>
+        <Field label="Website"><input style={inputStyle} value={f.website} onChange={u("website")} placeholder="e.g. mirabiliadesigns.com"/></Field>
+        <Field label="Notes" span><input style={inputStyle} value={f.notes} onChange={u("notes")} placeholder="e.g. favourite designer, ships from UK"/></Field>
+      </div>
+      <div style={{display:"flex",gap:"0.75rem",justifyContent:"flex-end",marginTop:"0.75rem"}}>
+        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={()=>{ if(!f.name.trim()) return; onSave(f); }}>Save Designer</Btn>
+      </div>
+    </div>
+  );
+}
+
+function OtherField({ value, onChange, placeholder }) {
+  return <input style={{...inputStyle,marginTop:"0.4rem"}} value={value||""} onChange={onChange} placeholder={placeholder||"Please specify..."}/>;
+}
+
+function ChartForm({ initial={}, designerName="", onSave, onClose }) {
+  const [f, setF] = useState({
+    title:"", purchasedFrom:"", datePurchased:"", dateStitched:"",
+    season:"", holiday:"", holidayOther:"", theme:"", themeOther:"",
+    notes:"", fileData:null, fileName:null, fileType:null,
+    ...initial
+  });
+  const [dragging, setDragging] = useState(false);
+  const fileRef = useRef();
+  const u = k => e => setF(p=>({...p,[k]:e.target.value}));
+
+  const handleFile = useCallback(async (file) => {
+    if (!file) return;
+    const isPdf = file.type==="application/pdf", isImg = file.type.startsWith("image/");
+    if (!isPdf && !isImg) { alert("Please upload a PDF or image (JPG, PNG, GIF, WebP)."); return; }
+    if (file.size > 5*1024*1024) { alert("File must be under 5MB."); return; }
+    const data = await toBase64(file);
+    setF(p=>({...p,fileData:data,fileName:file.name,fileType:file.type}));
+  }, []);
+
+  const onDrop = useCallback(e=>{e.preventDefault();setDragging(false);handleFile(e.dataTransfer.files[0]);}, [handleFile]);
+
+  const openFile = () => {
+    if (!f.fileData) return;
+    const w = window.open();
+    if (f.fileType==="application/pdf") w.document.write(`<iframe src="${f.fileData}" style="width:100%;height:100vh;border:none;"></iframe>`);
+    else w.document.write(`<html><body style="margin:0;background:#111;display:flex;justify-content:center;align-items:flex-start;"><img src="${f.fileData}" style="max-width:100%;display:block;"/></body></html>`);
+  };
+
+  const selectStyle2 = {...inputStyle};
+
+  return (
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 1rem"}}>
+        <Field label="Chart Title" span><input style={inputStyle} value={f.title} onChange={u("title")} placeholder="e.g. Winter Wonderland"/></Field>
+        {designerName && <Field label="Designer" span><div style={{...inputStyle,background:"#f5eef8",color:"#7c5c8a",fontWeight:600,display:"flex",alignItems:"center"}}>{designerName}</div></Field>}
+        <Field label="Purchased From"><input style={inputStyle} value={f.purchasedFrom} onChange={u("purchasedFrom")} placeholder="e.g. Stitchery, Etsy"/></Field>
+        <Field label="Date Purchased"><input type="date" style={inputStyle} value={f.datePurchased} onChange={u("datePurchased")}/></Field>
+        <Field label="Date Stitched"><input type="date" style={inputStyle} value={f.dateStitched} onChange={u("dateStitched")}/></Field>
+        <div/>
+
+        {/* Season / Holiday / Theme row */}
+        <Field label="Season">
+          <select style={selectStyle2} value={f.season} onChange={u("season")}>
+            {SEASONS.map(s=><option key={s} value={s}>{s||"— None —"}</option>)}
+          </select>
+        </Field>
+
+        <Field label="Holiday">
+          <select style={selectStyle2} value={f.holiday} onChange={u("holiday")}>
+            {HOLIDAYS.map(h=><option key={h} value={h}>{h||"— None —"}</option>)}
+          </select>
+          {f.holiday==="Other" && <OtherField value={f.holidayOther} onChange={u("holidayOther")} placeholder="e.g. Diwali, Lunar New Year…"/>}
+        </Field>
+
+        <Field label="Theme" span>
+          <select style={selectStyle2} value={f.theme} onChange={u("theme")}>
+            {THEMES.map(t=><option key={t} value={t}>{t||"— None —"}</option>)}
+          </select>
+          {f.theme==="Other" && <OtherField value={f.themeOther} onChange={u("themeOther")} placeholder="e.g. Cats, Lighthouses, Gnomes…"/>}
+        </Field>
+
+        <Field label="Notes" span><textarea style={textareaStyle} value={f.notes} onChange={u("notes")} placeholder="Thread palette, fabric, special stitches..."/></Field>
+
+        {/* File upload */}
+        <div style={{gridColumn:"1/-1"}}>
+          <label style={{display:"block",fontFamily:"'Lora',serif",fontSize:"0.78rem",color:"#8a6e9a",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"0.5rem"}}>Chart File (PDF or Image)</label>
+          {f.fileData ? (
+            <div style={{border:"1.5px solid #c4a8d4",borderRadius:"0.75rem",padding:"1rem",background:"#f5eef8",display:"flex",alignItems:"center",gap:"1rem"}}>
+              {f.fileType?.startsWith("image/")
+                ? <img src={f.fileData} alt="preview" style={{width:60,height:60,objectFit:"cover",borderRadius:"0.5rem",border:"1px solid #e2d4e8",flexShrink:0}}/>
+                : <div style={{width:60,height:60,background:"#c4758a22",borderRadius:"0.5rem",display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #c4a8d4",flexShrink:0,color:"#7c5c8a"}}><Icon name="pdf" size={28}/></div>}
+              <div style={{flex:1,overflow:"hidden"}}>
+                <div style={{fontFamily:"'Lora',serif",fontSize:"0.9rem",color:"#2d1f3a",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.fileName}</div>
+                <div style={{fontSize:"0.75rem",color:"#8a6e9a",marginTop:"0.1rem"}}>{f.fileType==="application/pdf"?"PDF Chart":"Image"} · attached</div>
+              </div>
+              <div style={{display:"flex",gap:"0.5rem",flexShrink:0}}>
+                <Btn variant="secondary" small onClick={openFile}><Icon name="eye" size={13}/>View</Btn>
+                <Btn variant="danger" small onClick={()=>setF(p=>({...p,fileData:null,fileName:null,fileType:null}))}><Icon name="trash" size={13}/></Btn>
+              </div>
+            </div>
+          ) : (
+            <div onDrop={onDrop} onDragOver={e=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)}
+              onClick={()=>fileRef.current.click()}
+              style={{border:`2px dashed ${dragging?"#7c5c8a":"#d4c2e0"}`,borderRadius:"0.75rem",padding:"1.5rem",textAlign:"center",cursor:"pointer",background:dragging?"#f0e8f8":"#fefcfa",transition:"all 0.15s"}}>
+              <input ref={fileRef} type="file" accept="application/pdf,image/*" style={{display:"none"}} onChange={e=>handleFile(e.target.files[0])}/>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"0.5rem"}}>
+                <div style={{display:"flex",gap:"0.75rem",color:"#b89ac8"}}><Icon name="pdf" size={28}/><Icon name="image" size={28}/></div>
+                <div style={{fontFamily:"'Lora',serif",fontSize:"0.9rem",color:"#5a4060",fontWeight:600}}>Drop a PDF or image here</div>
+                <div style={{fontSize:"0.78rem",color:"#8a6e9a"}}>or click to browse · PDF, JPG, PNG, WebP · Max 5MB</div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      <div style={{display:"flex",gap:"0.75rem",justifyContent:"flex-end",marginTop:"1.25rem"}}>
+        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={()=>onSave(f)}>Save Chart</Btn>
+      </div>
+    </div>
+  );
+}
+
+function ChartCard({ c, onEdit, onDelete }) {
+  const openFile = () => {
+    if (!c.fileData) return;
+    const w = window.open();
+    if (c.fileType==="application/pdf") w.document.write(`<iframe src="${c.fileData}" style="width:100%;height:100vh;border:none;"></iframe>`);
+    else w.document.write(`<html><body style="margin:0;background:#111;display:flex;justify-content:center;"><img src="${c.fileData}" style="max-width:100%;"/></body></html>`);
+  };
+  const tagColor = {"Fall":"#b8520a","Winter":"#1565c0","Spring":"#2e7d32","Summer":"#e65100"};
+  const holidayDisplay = c.holiday==="Other" ? c.holidayOther : c.holiday;
+  const themeDisplay   = c.theme==="Other"   ? c.themeOther   : c.theme;
+  return (
+    <div style={{background:"#fefcfa",border:"1.5px solid #e2d4e8",borderRadius:"0.75rem",padding:"1.1rem",boxShadow:"0 2px 8px rgba(100,70,130,0.07)",display:"flex",flexDirection:"column",gap:"0.4rem"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+        <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:"1rem",color:"#2d1f3a",margin:0,flex:1,lineHeight:1.3}}>{c.title||"Untitled Chart"}</h3>
+        <div style={{display:"flex",gap:"0.4rem",marginLeft:"0.5rem",flexShrink:0}}>
+          <button onClick={()=>onEdit(c)} style={{background:"none",border:"none",cursor:"pointer",color:"#8a6e9a",padding:"2px"}}><Icon name="edit" size={14}/></button>
+          <button onClick={()=>onDelete(c.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#c0392b",padding:"2px"}}><Icon name="trash" size={14}/></button>
+        </div>
+      </div>
+      {c.fileData && c.fileType?.startsWith("image/") && (
+        <div onClick={openFile} style={{cursor:"pointer",borderRadius:"0.5rem",overflow:"hidden",border:"1px solid #e2d4e8",height:110}}>
+          <img src={c.fileData} alt={c.title} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+        </div>
+      )}
+      {/* Season / Holiday / Theme badges */}
+      {(c.season||holidayDisplay||themeDisplay) && (
+        <div style={{display:"flex",flexWrap:"wrap",gap:"0.35rem",marginTop:"0.1rem"}}>
+          {c.season     && <Badge color={tagColor[c.season]||"#7c5c8a"}>{c.season}</Badge>}
+          {holidayDisplay && <Badge color="#c4758a">{holidayDisplay}</Badge>}
+          {themeDisplay   && <Badge color="#6a8f6a">{themeDisplay}</Badge>}
+        </div>
+      )}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.2rem 0.75rem",marginTop:"0.1rem"}}>
+        {c.purchasedFrom && <div style={{fontSize:"0.78rem",fontFamily:"'Lora',serif",color:"#5a4060",gridColumn:"1/-1"}}><span style={{color:"#8a6e9a"}}>From: </span>{c.purchasedFrom}</div>}
+        {c.datePurchased && <div style={{fontSize:"0.78rem",fontFamily:"'Lora',serif",color:"#5a4060"}}><span style={{color:"#8a6e9a"}}>Bought: </span>{c.datePurchased}</div>}
+        {c.dateStitched  && <div style={{fontSize:"0.78rem",fontFamily:"'Lora',serif",color:"#5a4060"}}><span style={{color:"#8a6e9a"}}>Stitched: </span>{c.dateStitched}</div>}
+      </div>
+      {c.fileData && (
+        <div style={{paddingTop:"0.5rem",borderTop:"1px dashed #ddc8ea",display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:"0.2rem"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"0.4rem",fontSize:"0.78rem",fontFamily:"'Lora',serif",color:"#8a6e9a"}}>
+            {c.fileType==="application/pdf" ? <Icon name="pdf" size={13}/> : <Icon name="image" size={13}/>}
+            <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:120}}>{c.fileName}</span>
+          </div>
+          <Btn variant="secondary" small onClick={openFile}><Icon name="eye" size={13}/>Open</Btn>
+        </div>
+      )}
+      {c.notes && <div style={{fontSize:"0.78rem",fontFamily:"'Lora',serif",color:"#6a5078",fontStyle:"italic",borderTop:"1px dashed #ddc8ea",paddingTop:"0.4rem",marginTop:"0.1rem"}}>{c.notes}</div>}
+    </div>
+  );
+}
+
+// ===== FABRIC =====
+function FabricCountForm({ initial={}, onSave, onClose }) {
+  const [f,setF] = useState({count:"",notes:"",...initial});
+  const u = k => e => setF(p=>({...p,[k]:e.target.value}));
+  const COMMON = ["10","14","16","18","20","22","25","28","32","36","40"];
+  return (
+    <div>
+      <Field label="Fabric Count (ct)">
+        <input style={inputStyle} value={f.count} onChange={u("count")} placeholder="e.g. 28"/>
+        <div style={{display:"flex",flexWrap:"wrap",gap:"0.35rem",marginTop:"0.5rem"}}>
+          {COMMON.map(c=>(
+            <button key={c} type="button" onClick={()=>setF(p=>({...p,count:c}))}
+              style={{padding:"0.2rem 0.6rem",borderRadius:"999px",cursor:"pointer",fontFamily:"'Lora',serif",fontSize:"0.78rem",fontWeight:600,
+                border: f.count===c?"1.5px solid #7c5c8a":"1.5px solid #d4c2e0",
+                background: f.count===c?"#7c5c8a":"#fefcfa",
+                color: f.count===c?"#fff":"#5a4060"}}>
+              {c}ct
+            </button>
+          ))}
+        </div>
+      </Field>
+      <Field label="Notes"><input style={inputStyle} value={f.notes} onChange={u("notes")} placeholder="e.g. mostly linen & evenweave"/></Field>
+      <div style={{display:"flex",gap:"0.75rem",justifyContent:"flex-end",marginTop:"0.5rem"}}>
+        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={()=>{ if(!f.count.trim()) return; onSave(f); }}>Save Count</Btn>
+      </div>
+    </div>
+  );
+}
+
+function FabricTable({ countRecord, fabrics, onAdd, onUpdate, onDelete, onAddToShop }) {
+  const [editingId, setEditingId] = useState(null);
+  const [editRow, setEditRow] = useState({});
+  const [addingNew, setAddingNew] = useState(false);
+  const [newRow, setNewRow] = useState({type:"",brand:"",nameColor:"",width:"",height:"",notes:""});
+  const [sortCol, setSortCol] = useState("type");
+  const [sortDir, setSortDir] = useState("asc");
+  const [fabSearch, setFabSearch] = useState("");
+
+  const uid = () => Math.random().toString(36).slice(2)+Date.now().toString(36);
+
+  const startEdit = (f) => { setEditingId(f.id); setEditRow({...f}); setAddingNew(false); };
+  const cancelEdit = () => { setEditingId(null); setEditRow({}); };
+  const saveEdit = () => { onUpdate({...editRow}); setEditingId(null); setEditRow({}); };
+
+  const startAdd = () => { setAddingNew(true); setNewRow({type:"",brand:"",nameColor:"",width:"",height:"",notes:""}); setEditingId(null); };
+  const cancelAdd = () => setAddingNew(false);
+  const saveAdd = () => {
+    if(!newRow.type && !newRow.nameColor) return;
+    onAdd({...newRow, countId:countRecord.id, id:uid(), createdAt:new Date().toISOString()});
+    setNewRow({type:"",brand:"",nameColor:"",width:"",height:"",notes:""});
+    setAddingNew(false);
+  };
+
+  const toggleSort = (col) => { if(sortCol===col) setSortDir(d=>d==="asc"?"desc":"asc"); else { setSortCol(col); setSortDir("asc"); } };
+
+  const filtered = fabrics.filter(f => {
+    if (!fabSearch) return true;
+    const s = fabSearch.toLowerCase();
+    return (f.type||"").toLowerCase().includes(s) || (f.brand||"").toLowerCase().includes(s) ||
+           (f.nameColor||"").toLowerCase().includes(s) || (f.notes||"").toLowerCase().includes(s);
+  });
+
+  const sorted = [...filtered].sort((a,b) => {
+    const av = a[sortCol]||"", bv = b[sortCol]||"";
+    return sortDir==="asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+  });
+
+  const thStyle = (col) => ({
+    padding:"0.6rem 0.75rem", fontFamily:"'Lora',serif", fontSize:"0.72rem",
+    textTransform:"uppercase", letterSpacing:"0.07em", color:"#8a6e9a",
+    background:"#f0e8f8", cursor:"pointer", userSelect:"none", whiteSpace:"nowrap",
+    borderBottom:"2px solid #e2d4e8", textAlign:"left", borderRight:"1px solid #e2d4e8"
+  });
+  const tdStyle = { padding:"0.55rem 0.75rem", borderBottom:"1px solid #f0e8f8", borderRight:"1px solid #f5f0fa", verticalAlign:"middle", fontSize:"0.88rem", color:"#2d1f3a", fontFamily:"'Lora',serif" };
+  const inlineInput = { padding:"0.3rem 0.5rem", border:"1.5px solid #c4a8d4", borderRadius:"0.35rem", fontFamily:"'Lora',serif", fontSize:"0.86rem", color:"#2d1f3a", background:"#faf6ff", width:"100%", boxSizing:"border-box" };
+  const SortIcon = ({col}) => <span style={{marginLeft:"0.3rem",opacity:sortCol===col?1:0.3}}>{sortCol===col&&sortDir==="desc"?"↓":"↑"}</span>;
+
+  return (
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:"0.75rem",marginBottom:"1rem",flexWrap:"wrap"}}>
+        <div style={{position:"relative",flex:1,minWidth:160}}>
+          <input value={fabSearch} onChange={e=>setFabSearch(e.target.value)} placeholder="Search fabric..." style={{...inputStyle,paddingLeft:"2rem",fontSize:"0.88rem"}}/>
+          <svg style={{position:"absolute",left:"0.65rem",top:"50%",transform:"translateY(-50%)"}} width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="#8a6e9a" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+        <div style={{fontSize:"0.8rem",fontFamily:"'Lora',serif",color:"#8a6e9a"}}>{sorted.length} piece{sorted.length!==1?"s":""}</div>
+        <Btn small onClick={startAdd}><Icon name="plus" size={13}/>Add Fabric</Btn>
+      </div>
+
+      <div style={{borderRadius:"0.75rem",overflow:"hidden",border:"1.5px solid #e2d4e8",boxShadow:"0 2px 10px rgba(100,70,130,0.06)"}}>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:580}}>
+            <thead>
+              <tr>
+                <th style={thStyle("type")} onClick={()=>toggleSort("type")}>Type <SortIcon col="type"/></th>
+                <th style={thStyle("brand")} onClick={()=>toggleSort("brand")}>Brand <SortIcon col="brand"/></th>
+                <th style={thStyle("nameColor")} onClick={()=>toggleSort("nameColor")}>Name / Color <SortIcon col="nameColor"/></th>
+                <th style={{...thStyle("width"),cursor:"default"}}>Width</th>
+                <th style={{...thStyle("height"),cursor:"default"}}>Height</th>
+                <th style={thStyle("notes")} onClick={()=>toggleSort("notes")}>Notes <SortIcon col="notes"/></th>
+                <th style={{...thStyle(),width:80,cursor:"default"}}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {addingNew && (
+                <tr style={{background:"#f5eef8"}}>
+                  <td style={tdStyle}><input style={inlineInput} value={newRow.type} onChange={e=>setNewRow(p=>({...p,type:e.target.value}))} placeholder="e.g. Linen" autoFocus/></td>
+                  <td style={tdStyle}><input style={inlineInput} value={newRow.brand} onChange={e=>setNewRow(p=>({...p,brand:e.target.value}))} placeholder="e.g. Wichelt"/></td>
+                  <td style={tdStyle}><input style={inlineInput} value={newRow.nameColor} onChange={e=>setNewRow(p=>({...p,nameColor:e.target.value}))} placeholder="e.g. Antique White"/></td>
+                  <td style={tdStyle}><input style={{...inlineInput,width:70}} value={newRow.width} onChange={e=>setNewRow(p=>({...p,width:e.target.value}))} placeholder={`e.g. 18"`}/></td>
+                  <td style={tdStyle}><input style={{...inlineInput,width:70}} value={newRow.height} onChange={e=>setNewRow(p=>({...p,height:e.target.value}))} placeholder={`e.g. 27"`}/></td>
+                  <td style={tdStyle}><input style={inlineInput} value={newRow.notes} onChange={e=>setNewRow(p=>({...p,notes:e.target.value}))} placeholder="Notes…"/></td>
+                  <td style={{...tdStyle,whiteSpace:"nowrap"}}>
+                    <button onClick={saveAdd} style={{background:"#7c5c8a",color:"#fff",border:"none",borderRadius:"0.35rem",padding:"0.28rem 0.6rem",cursor:"pointer",fontFamily:"'Lora',serif",fontSize:"0.78rem",marginRight:"0.3rem"}}>Save</button>
+                    <button onClick={cancelAdd} style={{background:"none",color:"#8a6e9a",border:"1px solid #d4c2e0",borderRadius:"0.35rem",padding:"0.28rem 0.6rem",cursor:"pointer",fontFamily:"'Lora',serif",fontSize:"0.78rem"}}>✕</button>
+                  </td>
+                </tr>
+              )}
+              {sorted.length === 0 && !addingNew && (
+                <tr><td colSpan={7} style={{...tdStyle,textAlign:"center",padding:"2.5rem",color:"#8a6e9a",fontStyle:"italic"}}>No fabric pieces yet — click Add Fabric to get started!</td></tr>
+              )}
+              {sorted.map((f,i) => editingId===f.id ? (
+                <tr key={f.id} style={{background:"#f5eef8"}}>
+                  <td style={tdStyle}><input style={inlineInput} value={editRow.type||""} onChange={e=>setEditRow(p=>({...p,type:e.target.value}))} autoFocus/></td>
+                  <td style={tdStyle}><input style={inlineInput} value={editRow.brand||""} onChange={e=>setEditRow(p=>({...p,brand:e.target.value}))}/></td>
+                  <td style={tdStyle}><input style={inlineInput} value={editRow.nameColor||""} onChange={e=>setEditRow(p=>({...p,nameColor:e.target.value}))}/></td>
+                  <td style={tdStyle}><input style={{...inlineInput,width:70}} value={editRow.width||""} onChange={e=>setEditRow(p=>({...p,width:e.target.value}))}/></td>
+                  <td style={tdStyle}><input style={{...inlineInput,width:70}} value={editRow.height||""} onChange={e=>setEditRow(p=>({...p,height:e.target.value}))}/></td>
+                  <td style={tdStyle}><input style={inlineInput} value={editRow.notes||""} onChange={e=>setEditRow(p=>({...p,notes:e.target.value}))}/></td>
+                  <td style={{...tdStyle,whiteSpace:"nowrap"}}>
+                    <button onClick={saveEdit} style={{background:"#7c5c8a",color:"#fff",border:"none",borderRadius:"0.35rem",padding:"0.28rem 0.6rem",cursor:"pointer",fontFamily:"'Lora',serif",fontSize:"0.78rem",marginRight:"0.3rem"}}>Save</button>
+                    <button onClick={cancelEdit} style={{background:"none",color:"#8a6e9a",border:"1px solid #d4c2e0",borderRadius:"0.35rem",padding:"0.28rem 0.6rem",cursor:"pointer",fontFamily:"'Lora',serif",fontSize:"0.78rem"}}>✕</button>
+                  </td>
+                </tr>
+              ) : (
+                <tr key={f.id} style={{background:i%2===0?"#fefcfa":"#faf6ff",transition:"background 0.1s"}}>
+                  <td style={{...tdStyle,fontWeight:600,color:"#4a3550"}}>{f.type||"—"}</td>
+                  <td style={tdStyle}>{f.brand||"—"}</td>
+                  <td style={tdStyle}>{f.nameColor||"—"}</td>
+                  <td style={{...tdStyle,textAlign:"center",color:"#5a4060"}}>{f.width||"—"}</td>
+                  <td style={{...tdStyle,textAlign:"center",color:"#5a4060"}}>{f.height||"—"}</td>
+                  <td style={{...tdStyle,color:"#6a5870",fontStyle:f.notes?"normal":"italic",fontSize:"0.83rem"}}>{f.notes||<span style={{color:"#ccc"}}>—</span>}</td>
+                  <td style={{...tdStyle,whiteSpace:"nowrap"}}>
+                    <button onClick={()=>startEdit(f)} style={{background:"none",border:"none",cursor:"pointer",color:"#7c5c8a",padding:"0.2rem 0.35rem"}}><Icon name="edit" size={14}/></button>
+                    <button onClick={()=>onDelete(f.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#c0392b",padding:"0.2rem 0.35rem"}}><Icon name="trash" size={14}/></button>
+                    {onAddToShop && <button title="Add to Shopping List" onClick={()=>onAddToShop({item:`${countRecord.count}ct ${f.type||"Fabric"}${f.nameColor?" – "+f.nameColor:""}`,category:"Fabric",quantity:"1",size:f.width&&f.height?`${f.width}×${f.height}`:"",placeToBuy:"",notes:"",otherCategory:"",bought:false})} style={{background:"none",border:"none",cursor:"pointer",color:"#2e7d32",padding:"0.2rem 0.35rem"}}><Icon name="cart" size={14}/></button>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===== FLOSS =====
+function BrandForm({ initial={}, onSave, onClose }) {
+  const [f,setF] = useState({name:"",designer:"",notes:"",...initial});
+  const u = k => e => setF(p=>({...p,[k]:e.target.value}));
+  return (
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 1rem"}}>
+        <Field label="Brand Name" span><input style={inputStyle} value={f.name} onChange={u("name")} placeholder="e.g. DMC, Anchor, Weeks Dye Works"/></Field>
+        <Field label="Designer / Dyer"><input style={inputStyle} value={f.designer} onChange={u("designer")} placeholder="e.g. Weeks Dye Works"/></Field>
+        <Field label="Notes"><input style={inputStyle} value={f.notes} onChange={u("notes")} placeholder="e.g. hand-dyed, overdyed"/></Field>
+      </div>
+      <div style={{display:"flex",gap:"0.75rem",justifyContent:"flex-end",marginTop:"0.5rem"}}>
+        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={()=>onSave(f)}>Save Brand</Btn>
+      </div>
+    </div>
+  );
+}
+
+function FlossTable({ brand, flosses, onAdd, onUpdate, onDelete, onAddToShop }) {
+  const [editingId, setEditingId] = useState(null);
+  const [editRow, setEditRow] = useState({});
+  const [addingNew, setAddingNew] = useState(false);
+  const [newRow, setNewRow] = useState({colorNumber:"",colorName:"",quantity:"1",notes:"",lowStock:false});
+  const [sortCol, setSortCol] = useState("colorNumber");
+  const [sortDir, setSortDir] = useState("asc");
+  const [flossSearch, setFlossSearch] = useState("");
+
+  const uid = () => Math.random().toString(36).slice(2)+Date.now().toString(36);
+
+  const startEdit = (f) => { setEditingId(f.id); setEditRow({...f}); setAddingNew(false); };
+  const cancelEdit = () => { setEditingId(null); setEditRow({}); };
+  const saveEdit = () => { onUpdate({...editRow}); setEditingId(null); setEditRow({}); };
+
+  const startAdd = () => { setAddingNew(true); setNewRow({colorNumber:"",colorName:"",quantity:"1",notes:"",lowStock:false}); setEditingId(null); };
+  const cancelAdd = () => setAddingNew(false);
+  const saveAdd = () => { if(!newRow.colorNumber && !newRow.colorName) return; onAdd({...newRow,brandId:brand.id,id:uid(),createdAt:new Date().toISOString()}); setNewRow({colorNumber:"",colorName:"",quantity:"1",notes:"",lowStock:false}); setAddingNew(false); };
+
+  const toggleSort = (col) => { if(sortCol===col) setSortDir(d=>d==="asc"?"desc":"asc"); else { setSortCol(col); setSortDir("asc"); } };
+
+  const filtered = flosses.filter(f => {
+    if (!flossSearch) return true;
+    const s = flossSearch.toLowerCase();
+    return (f.colorNumber||"").toLowerCase().includes(s) || (f.colorName||"").toLowerCase().includes(s) || (f.notes||"").toLowerCase().includes(s);
+  });
+
+  const sorted = [...filtered].sort((a,b) => {
+    let av = a[sortCol]||"", bv = b[sortCol]||"";
+    if (sortCol === "colorNumber") { const n1=parseInt(av)||0, n2=parseInt(bv)||0; if(n1!==n2) return sortDir==="asc"?n1-n2:n2-n1; }
+    if (sortCol === "quantity") { return sortDir==="asc" ? (parseInt(av)||0)-(parseInt(bv)||0) : (parseInt(bv)||0)-(parseInt(av)||0); }
+    return sortDir==="asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+  });
+
+  const lowStockCount = flosses.filter(f=>f.lowStock).length;
+
+  const thStyle = (col) => ({
+    padding:"0.6rem 0.75rem", fontFamily:"'Lora',serif", fontSize:"0.72rem",
+    textTransform:"uppercase", letterSpacing:"0.07em", color:"#8a6e9a",
+    background:"#f0e8f8", cursor:"pointer", userSelect:"none", whiteSpace:"nowrap",
+    borderBottom:"2px solid #e2d4e8", textAlign:"left",
+    borderRight:"1px solid #e2d4e8"
+  });
+  const tdStyle = { padding:"0.55rem 0.75rem", borderBottom:"1px solid #f0e8f8", borderRight:"1px solid #f5f0fa", verticalAlign:"middle", fontSize:"0.9rem", color:"#2d1f3a", fontFamily:"'Lora',serif" };
+  const inlineInput = { padding:"0.3rem 0.5rem", border:"1.5px solid #c4a8d4", borderRadius:"0.35rem", fontFamily:"'Lora',serif", fontSize:"0.88rem", color:"#2d1f3a", background:"#faf6ff", width:"100%", boxSizing:"border-box" };
+
+  const SortIcon = ({col}) => <span style={{marginLeft:"0.3rem",opacity:sortCol===col?1:0.3}}>{sortCol===col&&sortDir==="desc"?"↓":"↑"}</span>;
+
+  return (
+    <div>
+      {/* Table toolbar */}
+      <div style={{display:"flex",alignItems:"center",gap:"0.75rem",marginBottom:"1rem",flexWrap:"wrap"}}>
+        <div style={{position:"relative",flex:1,minWidth:160}}>
+          <input value={flossSearch} onChange={e=>setFlossSearch(e.target.value)} placeholder="Search colors..." style={{...inputStyle,paddingLeft:"2rem",fontSize:"0.88rem"}}/>
+          <svg style={{position:"absolute",left:"0.65rem",top:"50%",transform:"translateY(-50%)",color:"#9b7b4d"}} width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="#8a6e9a" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+        <div style={{fontSize:"0.8rem",fontFamily:"'Lora',serif",color:"#8a6e9a"}}>{sorted.length} color{sorted.length!==1?"s":""}</div>
+        {lowStockCount > 0 && (
+          <div style={{display:"flex",alignItems:"center",gap:"0.3rem",background:"#fff3e0",color:"#e65100",fontSize:"0.78rem",fontFamily:"'Lora',serif",fontWeight:600,padding:"0.25rem 0.65rem",borderRadius:"999px",border:"1px solid #ffcc80"}}>
+            <Icon name="warning" size={12}/> {lowStockCount} low stock
+          </div>
+        )}
+        {lowStockCount > 0 && onAddToShop && (
+          <button onClick={()=>flosses.filter(x=>x.lowStock).forEach(x=>onAddToShop({item:`${brand.name} ${x.colorNumber}${x.colorName?" – "+x.colorName:""}`,category:"Floss",quantity:"1",size:"",placeToBuy:"",notes:"",otherCategory:"",bought:false}))} style={{background:"#fff3e0",color:"#e65100",border:"1px solid #ffcc80",borderRadius:"999px",padding:"0.25rem 0.65rem",cursor:"pointer",fontFamily:"'Lora',serif",fontSize:"0.75rem",fontWeight:600,display:"flex",alignItems:"center",gap:"0.3rem"}}>
+            <Icon name="cart" size={12}/>Add all low stock
+          </button>
+        )}
+        <Btn small onClick={startAdd}><Icon name="plus" size={13}/>Add Color</Btn>
+      </div>
+
+      {/* Table */}
+      <div style={{borderRadius:"0.75rem",overflow:"hidden",border:"1.5px solid #e2d4e8",boxShadow:"0 2px 10px rgba(100,70,130,0.06)"}}>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:520}}>
+            <thead>
+              <tr>
+                <th style={{...thStyle("colorNumber"),width:110}} onClick={()=>toggleSort("colorNumber")}>Color # <SortIcon col="colorNumber"/></th>
+                <th style={{...thStyle("colorName")}} onClick={()=>toggleSort("colorName")}>Color Name <SortIcon col="colorName"/></th>
+                <th style={{...thStyle("quantity"),width:90}} onClick={()=>toggleSort("quantity")}>Skeins <SortIcon col="quantity"/></th>
+                <th style={{...thStyle("lowStock"),width:80,cursor:"default"}}>Low Stock</th>
+                <th style={{...thStyle("notes")}}>Notes</th>
+                <th style={{...thStyle(),width:80,cursor:"default"}}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Add new row */}
+              {addingNew && (
+                <tr style={{background:"#f5eef8"}}>
+                  <td style={tdStyle}><input style={inlineInput} value={newRow.colorNumber} onChange={e=>setNewRow(p=>({...p,colorNumber:e.target.value}))} placeholder="e.g. 321" autoFocus/></td>
+                  <td style={tdStyle}><input style={inlineInput} value={newRow.colorName} onChange={e=>setNewRow(p=>({...p,colorName:e.target.value}))} placeholder="e.g. Christmas Red"/></td>
+                  <td style={tdStyle}><input style={{...inlineInput,width:60}} value={newRow.quantity} onChange={e=>setNewRow(p=>({...p,quantity:e.target.value}))} placeholder="1"/></td>
+                  <td style={{...tdStyle,textAlign:"center"}}><input type="checkbox" checked={newRow.lowStock} onChange={e=>setNewRow(p=>({...p,lowStock:e.target.checked}))} style={{width:16,height:16,accentColor:"#e65100"}}/></td>
+                  <td style={tdStyle}><input style={inlineInput} value={newRow.notes} onChange={e=>setNewRow(p=>({...p,notes:e.target.value}))} placeholder="Notes…"/></td>
+                  <td style={{...tdStyle,whiteSpace:"nowrap"}}>
+                    <button onClick={saveAdd} style={{background:"#7c5c8a",color:"#fff",border:"none",borderRadius:"0.35rem",padding:"0.28rem 0.6rem",cursor:"pointer",fontFamily:"'Lora',serif",fontSize:"0.78rem",marginRight:"0.3rem"}}>Save</button>
+                    <button onClick={cancelAdd} style={{background:"none",color:"#8a6e9a",border:"1px solid #d4c2e0",borderRadius:"0.35rem",padding:"0.28rem 0.6rem",cursor:"pointer",fontFamily:"'Lora',serif",fontSize:"0.78rem"}}>✕</button>
+                  </td>
+                </tr>
+              )}
+              {sorted.length === 0 && !addingNew && (
+                <tr><td colSpan={6} style={{...tdStyle,textAlign:"center",padding:"2.5rem",color:"#8a6e9a",fontStyle:"italic"}}>No colors yet — click Add Color to get started!</td></tr>
+              )}
+              {sorted.map((f,i) => editingId===f.id ? (
+                <tr key={f.id} style={{background:"#f5eef8"}}>
+                  <td style={tdStyle}><input style={inlineInput} value={editRow.colorNumber} onChange={e=>setEditRow(p=>({...p,colorNumber:e.target.value}))} autoFocus/></td>
+                  <td style={tdStyle}><input style={inlineInput} value={editRow.colorName} onChange={e=>setEditRow(p=>({...p,colorName:e.target.value}))}/></td>
+                  <td style={tdStyle}><input style={{...inlineInput,width:60}} value={editRow.quantity} onChange={e=>setEditRow(p=>({...p,quantity:e.target.value}))}/></td>
+                  <td style={{...tdStyle,textAlign:"center"}}><input type="checkbox" checked={!!editRow.lowStock} onChange={e=>setEditRow(p=>({...p,lowStock:e.target.checked}))} style={{width:16,height:16,accentColor:"#e65100"}}/></td>
+                  <td style={tdStyle}><input style={inlineInput} value={editRow.notes||""} onChange={e=>setEditRow(p=>({...p,notes:e.target.value}))}/></td>
+                  <td style={{...tdStyle,whiteSpace:"nowrap"}}>
+                    <button onClick={saveEdit} style={{background:"#7c5c8a",color:"#fff",border:"none",borderRadius:"0.35rem",padding:"0.28rem 0.6rem",cursor:"pointer",fontFamily:"'Lora',serif",fontSize:"0.78rem",marginRight:"0.3rem"}}>Save</button>
+                    <button onClick={cancelEdit} style={{background:"none",color:"#8a6e9a",border:"1px solid #d4c2e0",borderRadius:"0.35rem",padding:"0.28rem 0.6rem",cursor:"pointer",fontFamily:"'Lora',serif",fontSize:"0.78rem"}}>✕</button>
+                  </td>
+                </tr>
+              ) : (
+                <tr key={f.id} style={{background: f.lowStock ? "#fff8f0" : i%2===0?"#fefcfa":"#faf6ff", transition:"background 0.1s"}}>
+                  <td style={{...tdStyle,fontWeight:600,color:"#4a3550"}}>{f.colorNumber||"—"}</td>
+                  <td style={tdStyle}>{f.colorName||"—"}</td>
+                  <td style={{...tdStyle,textAlign:"center"}}>{f.quantity||"1"}</td>
+                  <td style={{...tdStyle,textAlign:"center"}}>
+                    {f.lowStock
+                      ? <span style={{display:"inline-flex",alignItems:"center",gap:"0.25rem",color:"#e65100",fontSize:"0.75rem",fontWeight:600}}><Icon name="warning" size={13}/>Low</span>
+                      : <span style={{color:"#b0c4b1",fontSize:"0.8rem"}}>✓</span>}
+                  </td>
+                  <td style={{...tdStyle,color:"#6a5870",fontStyle:f.notes?"normal":"italic",fontSize:"0.84rem"}}>{f.notes||<span style={{color:"#ccc"}}>—</span>}</td>
+                  <td style={{...tdStyle,whiteSpace:"nowrap"}}>
+                    <button onClick={()=>startEdit(f)} style={{background:"none",border:"none",cursor:"pointer",color:"#7c5c8a",padding:"0.2rem 0.35rem",borderRadius:"0.3rem"}}><Icon name="edit" size={14}/></button>
+                    <button onClick={()=>onDelete(f.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#c0392b",padding:"0.2rem 0.35rem",borderRadius:"0.3rem"}}><Icon name="trash" size={14}/></button>
+                    {onAddToShop && <button title="Add to Shopping List" onClick={()=>onAddToShop({item:`${brand.name} ${f.colorNumber}${f.colorName?" – "+f.colorName:""}`,category:"Floss",quantity:"1",size:"",placeToBuy:"",notes:"",otherCategory:"",bought:false})} style={{background:"none",border:"none",cursor:"pointer",color:"#2e7d32",padding:"0.2rem 0.35rem",borderRadius:"0.3rem"}}><Icon name="cart" size={14}/></button>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===== SHOPPING LIST =====
+const SHOP_CATS = ["Chart","Fabric","Floss","Needles","Finishing Fabric","Notions","Other"];
+const SHOP_PLACES = ["","123 Stitch","Etsy","FQS","Primrose Cottage","Stitchery","Needle in a Haystack","Nordic Needle","Hobby Lobby","Michael's","Amazon","Designer Website","Other"];
+const SHOP_CAT_COLOR = {"Chart":"#7c5c8a","Fabric":"#2e7d32","Floss":"#c4758a","Needles":"#1565c0","Finishing Fabric":"#6a8f6a","Notions":"#b8520a","Other":"#6a5078"};
+
+function ShoppingTab({ shoppingList, onSave }) {
+  const [shopSearch, setShopSearch] = useState("");
+  const [catFilter, setCatFilter] = useState("");
+  const [showBought, setShowBought] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editRow, setEditRow] = useState({});
+  const [addingNew, setAddingNew] = useState(false);
+  const [newRow, setNewRow] = useState({item:"",category:"Floss",otherCategory:"",quantity:"1",size:"",placeToBuy:"",notes:"",bought:false});
+
+  const uid = () => Math.random().toString(36).slice(2)+Date.now().toString(36);
+  const save = (list) => onSave(list);
+  const addItem   = (row) => save([...shoppingList, {...row, id:uid(), createdAt:new Date().toISOString()}]);
+  const updateItem = (row) => save(shoppingList.map(x=>x.id===row.id?row:x));
+  const deleteItem = (id)  => save(shoppingList.filter(x=>x.id!==id));
+  const toggleBought = (id) => save(shoppingList.map(x=>x.id===id?{...x,bought:!x.bought}:x));
+
+  // ── Export helpers ──
+  const toBuyList = shoppingList.filter(x=>!x.bought);
+
+  const buildTextList = () => {
+    if (toBuyList.length===0) return "Shopping list is empty!";
+    // Group by store
+    const byStore = {};
+    toBuyList.forEach(x => {
+      const store = x.placeToBuy||"No store specified";
+      if (!byStore[store]) byStore[store] = [];
+      byStore[store].push(x);
+    });
+    const lines = ["🛒 StitchKeeper Shopping List", "─".repeat(30)];
+    Object.entries(byStore).forEach(([store, items]) => {
+      lines.push("\n📍 " + store.toUpperCase());
+      items.forEach(x => {
+        const cat  = x.category==="Other"&&x.otherCategory ? x.otherCategory : x.category;
+        const qty  = x.quantity && x.quantity!=="1" ? ` ×${x.quantity}` : "";
+        const size = x.size ? ` (${x.size})` : "";
+        const note = x.notes ? ` — ${x.notes}` : "";
+        lines.push(`  • [${cat}] ${x.item}${qty}${size}${note}`);
+      });
+    });
+    lines.push("\n─".repeat(15));
+    lines.push(`${toBuyList.length} item${toBuyList.length!==1?"s":""} to buy`);
+    return lines.join("\n");
+  };
+
+  const shareAsText = async () => {
+    const text = buildTextList();
+    // Try native share (works on mobile — opens Messages, WhatsApp, etc.)
+    if (navigator.share) {
+      try { await navigator.share({ title:"Shopping List", text }); return; } catch(e) {}
+    }
+    // Fallback: copy to clipboard
+    try {
+      await navigator.clipboard.writeText(text);
+      alert("Shopping list copied to clipboard!\nPaste it into a text message or email.");
+    } catch(e) {
+      // Final fallback: show in a textarea for manual copy
+      const w = window.open("","_blank","width=500,height=600");
+      w.document.write(`<html><body style="font-family:monospace;padding:1rem;white-space:pre-wrap;background:#f9f5fc;">${text.replace(/</g,"&lt;")}</body></html>`);
+    }
+  };
+
+  const emailList = () => {
+    if (toBuyList.length===0) { alert("Nothing to buy yet!"); return; }
+    const text = buildTextList();
+    const date = new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
+    const subject = encodeURIComponent(`StitchKeeper Shopping List — ${date}`);
+    // mailto: body — encode the plain text list
+    const body = encodeURIComponent(text);
+    // mailto: URI — opens default mail app with subject + body pre-filled
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  };
+
+  const exportPDF = () => {
+    if (toBuyList.length===0) { alert("Nothing to buy yet!"); return; }
+    const byStore = {};
+    toBuyList.forEach(x => {
+      const store = x.placeToBuy||"No store specified";
+      if (!byStore[store]) byStore[store] = [];
+      byStore[store].push(x);
+    });
+    const byCategory = {};
+    toBuyList.forEach(x => {
+      const cat = x.category==="Other"&&x.otherCategory?x.otherCategory:x.category;
+      if (!byCategory[cat]) byCategory[cat] = [];
+      byCategory[cat].push(x);
+    });
+    const date = new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
+    const catColors = {"Chart":"#7c5c8a","Fabric":"#2e7d32","Floss":"#c4758a","Needles":"#1565c0","Finishing Fabric":"#6a8f6a","Notions":"#b8520a","Other":"#6a5078"};
+
+    const storeRows = Object.entries(byStore).map(([store,items])=>`
+      <div style="margin-bottom:1.4rem;">
+        <div style="background:#4a3550;color:#fff;padding:0.45rem 0.85rem;border-radius:0.4rem 0.4rem 0 0;font-size:0.82rem;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">📍 ${store}</div>
+        <table style="width:100%;border-collapse:collapse;border:1px solid #e2d4e8;border-top:none;">
+          <thead><tr style="background:#f0e8f8;">
+            <th style="padding:0.4rem 0.6rem;font-size:0.72rem;text-align:left;border-right:1px solid #e2d4e8;">Category</th>
+            <th style="padding:0.4rem 0.6rem;font-size:0.72rem;text-align:left;border-right:1px solid #e2d4e8;">Item</th>
+            <th style="padding:0.4rem 0.6rem;font-size:0.72rem;text-align:center;border-right:1px solid #e2d4e8;">Qty</th>
+            <th style="padding:0.4rem 0.6rem;font-size:0.72rem;text-align:left;border-right:1px solid #e2d4e8;">Size</th>
+            <th style="padding:0.4rem 0.6rem;font-size:0.72rem;text-align:left;">Notes</th>
+          </tr></thead>
+          <tbody>${items.map((x,i)=>{
+            const cat=x.category==="Other"&&x.otherCategory?x.otherCategory:x.category;
+            const col=catColors[x.category]||"#7c5c8a";
+            return `<tr style="background:${i%2===0?"#fefcfa":"#faf6ff"};">
+              <td style="padding:0.4rem 0.6rem;border-right:1px solid #f0e8f8;"><span style="background:${col}22;color:${col};padding:0.1rem 0.5rem;border-radius:999px;font-size:0.72rem;font-weight:600;">${cat}</span></td>
+              <td style="padding:0.4rem 0.6rem;border-right:1px solid #f0e8f8;font-weight:600;font-size:0.85rem;">${x.item||""}</td>
+              <td style="padding:0.4rem 0.6rem;border-right:1px solid #f0e8f8;text-align:center;font-size:0.85rem;">${x.quantity||"1"}</td>
+              <td style="padding:0.4rem 0.6rem;border-right:1px solid #f0e8f8;font-size:0.82rem;color:#5a4060;">${x.size||"—"}</td>
+              <td style="padding:0.4rem 0.6rem;font-size:0.82rem;color:#6a5078;font-style:italic;">${x.notes||""}</td>
+            </tr>`;
+          }).join("")}</tbody>
+        </table>
+      </div>`).join("");
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+      <title>StitchKeeper Shopping List</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Lora:wght@400;500;600&display=swap');
+        body { font-family:'Lora',serif; margin:0; padding:2rem; background:#fff; color:#2d1f3a; max-width:800px; margin:0 auto; }
+        @media print { body { padding:0.5rem; } .no-print { display:none; } }
+      </style>
+    </head><body>
+      <div style="text-align:center;margin-bottom:2rem;padding-bottom:1rem;border-bottom:2px solid #e2d4e8;">
+        <div style="font-family:'Playfair Display',serif;font-size:1.8rem;color:#4a3550;font-weight:700;">🧵 StitchKeeper</div>
+        <div style="font-size:1rem;color:#8a6e9a;margin-top:0.25rem;">Shopping List · ${date}</div>
+        <div style="font-size:0.85rem;color:#b89ac8;margin-top:0.15rem;">${toBuyList.length} item${toBuyList.length!==1?"s":""} to buy</div>
+      </div>
+      <h2 style="font-family:'Playfair Display',serif;color:#4a3550;font-size:1.1rem;margin-bottom:1rem;">By Store</h2>
+      ${storeRows}
+      <div class="no-print" style="text-align:center;margin-top:2rem;">
+        <button onclick="window.print()" style="background:linear-gradient(135deg,#7c5c8a,#a0607a);color:#fff;border:none;padding:0.75rem 2rem;border-radius:0.5rem;font-family:'Lora',serif;font-size:1rem;cursor:pointer;font-weight:600;">🖨️ Print / Save as PDF</button>
+      </div>
+    </body></html>`;
+
+    const w = window.open("","_blank");
+    w.document.write(html);
+    w.document.close();
+  };
+
+  const all = shoppingList;
+  const filtered = all.filter(x => {
+    if (!showBought && x.bought) return false;
+    if (catFilter && x.category!==catFilter) return false;
+    if (shopSearch) { const s=shopSearch.toLowerCase(); return (x.item||"").toLowerCase().includes(s)||(x.placeToBuy||"").toLowerCase().includes(s)||(x.notes||"").toLowerCase().includes(s)||(x.otherCategory||"").toLowerCase().includes(s); }
+    return true;
+  });
+  const toBuy  = all.filter(x=>!x.bought).length;
+  const bought = all.filter(x=>x.bought).length;
+
+  const thS = {padding:"0.6rem 0.75rem",fontFamily:"'Lora',serif",fontSize:"0.72rem",textTransform:"uppercase",letterSpacing:"0.07em",color:"#8a6e9a",background:"#f0e8f8",whiteSpace:"nowrap",borderBottom:"2px solid #e2d4e8",textAlign:"left",borderRight:"1px solid #e2d4e8"};
+  const tdS = {padding:"0.55rem 0.75rem",borderBottom:"1px solid #f0e8f8",borderRight:"1px solid #f5f0fa",verticalAlign:"middle",fontSize:"0.88rem",color:"#2d1f3a",fontFamily:"'Lora',serif"};
+  const inpS = {padding:"0.3rem 0.5rem",border:"1.5px solid #c4a8d4",borderRadius:"0.35rem",fontFamily:"'Lora',serif",fontSize:"0.86rem",color:"#2d1f3a",background:"#faf6ff",width:"100%",boxSizing:"border-box"};
+
+  return (
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:"1rem",marginBottom:"1.5rem",flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:160}}>
+          <h2 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#2d1f3a",fontSize:"1.4rem"}}>Shopping List</h2>
+          <div style={{color:"#8a6e9a",fontSize:"0.78rem"}}>{toBuy} to buy{bought>0&&<span> · {bought} bought ✓</span>}</div>
+        </div>
+        <div style={{position:"relative",flex:1,minWidth:160,maxWidth:260}}>
+          <input value={shopSearch} onChange={e=>setShopSearch(e.target.value)} placeholder="Search list…" style={{...inputStyle,paddingLeft:"2rem",fontSize:"0.88rem"}}/>
+          <svg style={{position:"absolute",left:"0.65rem",top:"50%",transform:"translateY(-50%)"}} width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="#8a6e9a" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+        <select value={catFilter} onChange={e=>setCatFilter(e.target.value)} style={{...selectStyle,width:"auto",padding:"0.45rem 0.7rem",fontSize:"0.83rem"}}>
+          <option value="">All Categories</option>
+          {SHOP_CATS.map(c=><option key={c} value={c}>{c}</option>)}
+        </select>
+        <label style={{display:"flex",alignItems:"center",gap:"0.4rem",fontFamily:"'Lora',serif",fontSize:"0.82rem",color:"#8a6e9a",cursor:"pointer",whiteSpace:"nowrap"}}>
+          <input type="checkbox" checked={showBought} onChange={e=>setShowBought(e.target.checked)} style={{accentColor:"#7c5c8a"}}/> Show bought
+        </label>
+        <Btn small onClick={()=>setAddingNew(true)}><Icon name="plus" size={13}/>Add Item</Btn>
+        {bought>0 && <Btn small variant="ghost" onClick={()=>{ if(window.confirm("Clear all bought items?")) save(shoppingList.filter(x=>!x.bought)); }}>Clear bought</Btn>}
+        {toBuyList.length>0 && <Btn small variant="secondary" onClick={shareAsText}><Icon name="share" size={13}/>Text / Share</Btn>}
+        {toBuyList.length>0 && <Btn small variant="secondary" onClick={emailList}><Icon name="email" size={13}/>Email List</Btn>}
+        {toBuyList.length>0 && <Btn small variant="secondary" onClick={exportPDF}><Icon name="print" size={13}/>Print / PDF</Btn>}
+      </div>
+
+      {all.length===0 && !addingNew ? (
+        <EmptyState emoji="🛒" title="Shopping list is empty" sub="Add items manually or tap the 🛒 button in your Floss and Fabric stash to add items automatically."/>
+      ) : (
+        <div style={{borderRadius:"0.75rem",overflow:"hidden",border:"1.5px solid #e2d4e8",boxShadow:"0 2px 10px rgba(100,70,130,0.06)"}}>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",minWidth:640}}>
+              <thead>
+                <tr>
+                  <th style={{...thS,width:36,cursor:"default"}}>✓</th>
+                  <th style={thS}>Item</th>
+                  <th style={{...thS,width:130}}>Category</th>
+                  <th style={{...thS,width:60}}>Qty</th>
+                  <th style={{...thS,width:100}}>Size</th>
+                  <th style={thS}>Place to Buy</th>
+                  <th style={thS}>Notes</th>
+                  <th style={{...thS,width:80,cursor:"default"}}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {addingNew && (
+                  <tr style={{background:"#f5eef8"}}>
+                    <td style={{...tdS,textAlign:"center"}}><input type="checkbox" disabled style={{accentColor:"#7c5c8a"}}/></td>
+                    <td style={tdS}><input style={inpS} value={newRow.item} onChange={e=>setNewRow(p=>({...p,item:e.target.value}))} placeholder="e.g. DMC 321" autoFocus/></td>
+                    <td style={tdS}>
+                      <select style={inpS} value={newRow.category} onChange={e=>setNewRow(p=>({...p,category:e.target.value}))}>
+                        {SHOP_CATS.map(c=><option key={c}>{c}</option>)}
+                      </select>
+                      {newRow.category==="Other" && <input style={{...inpS,marginTop:"0.3rem"}} value={newRow.otherCategory} onChange={e=>setNewRow(p=>({...p,otherCategory:e.target.value}))} placeholder="Specify…"/>}
+                    </td>
+                    <td style={tdS}><input style={{...inpS,width:50}} value={newRow.quantity} onChange={e=>setNewRow(p=>({...p,quantity:e.target.value}))} placeholder="1"/></td>
+                    <td style={tdS}><input style={inpS} value={newRow.size} onChange={e=>setNewRow(p=>({...p,size:e.target.value}))} placeholder={`e.g. 18"×27"`}/></td>
+                    <td style={tdS}>
+                      <select style={inpS} value={newRow.placeToBuy} onChange={e=>setNewRow(p=>({...p,placeToBuy:e.target.value}))}>
+                        {SHOP_PLACES.map(pl=><option key={pl} value={pl}>{pl||"— Select —"}</option>)}
+                      </select>
+                    </td>
+                    <td style={tdS}><input style={inpS} value={newRow.notes} onChange={e=>setNewRow(p=>({...p,notes:e.target.value}))} placeholder="Notes…"/></td>
+                    <td style={{...tdS,whiteSpace:"nowrap"}}>
+                      <button onClick={()=>{if(newRow.item.trim()){addItem(newRow);setNewRow({item:"",category:"Floss",otherCategory:"",quantity:"1",size:"",placeToBuy:"",notes:"",bought:false});setAddingNew(false);}}} style={{background:"#7c5c8a",color:"#fff",border:"none",borderRadius:"0.35rem",padding:"0.28rem 0.6rem",cursor:"pointer",fontFamily:"'Lora',serif",fontSize:"0.78rem",marginRight:"0.3rem"}}>Save</button>
+                      <button onClick={()=>setAddingNew(false)} style={{background:"none",color:"#8a6e9a",border:"1px solid #d4c2e0",borderRadius:"0.35rem",padding:"0.28rem 0.6rem",cursor:"pointer",fontFamily:"'Lora',serif",fontSize:"0.78rem"}}>✕</button>
+                    </td>
+                  </tr>
+                )}
+                {filtered.length===0 && !addingNew && (
+                  <tr><td colSpan={8} style={{...tdS,textAlign:"center",padding:"2rem",color:"#8a6e9a",fontStyle:"italic"}}>No items match your filters.</td></tr>
+                )}
+                {filtered.map((x,i) => editingId===x.id ? (
+                  <tr key={x.id} style={{background:"#f5eef8"}}>
+                    <td style={{...tdS,textAlign:"center"}}><input type="checkbox" checked={!!x.bought} onChange={()=>toggleBought(x.id)} style={{accentColor:"#7c5c8a",width:16,height:16}}/></td>
+                    <td style={tdS}><input style={inpS} value={editRow.item||""} onChange={e=>setEditRow(p=>({...p,item:e.target.value}))} autoFocus/></td>
+                    <td style={tdS}>
+                      <select style={inpS} value={editRow.category||"Floss"} onChange={e=>setEditRow(p=>({...p,category:e.target.value}))}>
+                        {SHOP_CATS.map(c=><option key={c}>{c}</option>)}
+                      </select>
+                      {editRow.category==="Other" && <input style={{...inpS,marginTop:"0.3rem"}} value={editRow.otherCategory||""} onChange={e=>setEditRow(p=>({...p,otherCategory:e.target.value}))} placeholder="Specify…"/>}
+                    </td>
+                    <td style={tdS}><input style={{...inpS,width:50}} value={editRow.quantity||""} onChange={e=>setEditRow(p=>({...p,quantity:e.target.value}))}/></td>
+                    <td style={tdS}><input style={inpS} value={editRow.size||""} onChange={e=>setEditRow(p=>({...p,size:e.target.value}))}/></td>
+                    <td style={tdS}>
+                      <select style={inpS} value={editRow.placeToBuy||""} onChange={e=>setEditRow(p=>({...p,placeToBuy:e.target.value}))}>
+                        {SHOP_PLACES.map(pl=><option key={pl} value={pl}>{pl||"— Select —"}</option>)}
+                      </select>
+                    </td>
+                    <td style={tdS}><input style={inpS} value={editRow.notes||""} onChange={e=>setEditRow(p=>({...p,notes:e.target.value}))}/></td>
+                    <td style={{...tdS,whiteSpace:"nowrap"}}>
+                      <button onClick={()=>{updateItem({...editRow});setEditingId(null);}} style={{background:"#7c5c8a",color:"#fff",border:"none",borderRadius:"0.35rem",padding:"0.28rem 0.6rem",cursor:"pointer",fontFamily:"'Lora',serif",fontSize:"0.78rem",marginRight:"0.3rem"}}>Save</button>
+                      <button onClick={()=>setEditingId(null)} style={{background:"none",color:"#8a6e9a",border:"1px solid #d4c2e0",borderRadius:"0.35rem",padding:"0.28rem 0.6rem",cursor:"pointer",fontFamily:"'Lora',serif",fontSize:"0.78rem"}}>✕</button>
+                    </td>
+                  </tr>
+                ) : (
+                  <tr key={x.id} style={{background:x.bought?"#f5f5f5":i%2===0?"#fefcfa":"#faf6ff",opacity:x.bought?0.6:1,transition:"all 0.15s"}}>
+                    <td style={{...tdS,textAlign:"center"}}>
+                      <input type="checkbox" checked={!!x.bought} onChange={()=>toggleBought(x.id)} style={{accentColor:"#7c5c8a",width:16,height:16,cursor:"pointer"}}/>
+                    </td>
+                    <td style={{...tdS,fontWeight:600,color:"#2d1f3a",textDecoration:x.bought?"line-through":"none"}}>{x.item||"—"}</td>
+                    <td style={tdS}><Badge color={SHOP_CAT_COLOR[x.category]||"#7c5c8a"}>{x.category==="Other"&&x.otherCategory?x.otherCategory:x.category}</Badge></td>
+                    <td style={{...tdS,textAlign:"center"}}>{x.quantity||"1"}</td>
+                    <td style={{...tdS,color:"#5a4060",fontSize:"0.83rem"}}>{x.size||"—"}</td>
+                    <td style={{...tdS,color:"#5a4060"}}>{x.placeToBuy||<span style={{color:"#ccc",fontStyle:"italic"}}>—</span>}</td>
+                    <td style={{...tdS,color:"#6a5870",fontStyle:"italic",fontSize:"0.83rem"}}>{x.notes||<span style={{color:"#ccc"}}>—</span>}</td>
+                    <td style={{...tdS,whiteSpace:"nowrap"}}>
+                      <button onClick={()=>{setEditingId(x.id);setEditRow({...x});setAddingNew(false);}} style={{background:"none",border:"none",cursor:"pointer",color:"#7c5c8a",padding:"0.2rem 0.35rem"}}><Icon name="edit" size={14}/></button>
+                      <button onClick={()=>deleteItem(x.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#c0392b",padding:"0.2rem 0.35rem"}}><Icon name="trash" size={14}/></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ===== NOTIONS & TOOLS =====
+const NOTION_TYPES_DEFAULT = ["Needles","Needle Minders","Floss Drops","Finishing Pieces","Beads","Buttons","Trim","Scissors","Hoops & Frames"];
+const NEEDLE_SIZES = ["24","26","28","Other"];
+
+const NOTION_FIELDS = {
+  "Needles":          ["brand","needleSize","quantity","condition","notes"],
+  "Needle Minders":   ["brand","description","material","color","quantity","notes"],
+  "Floss Drops":      ["brand","colorName","colorNumber","quantity","notes"],
+  "Finishing Pieces": ["brand","pieceType","size","material","color","quantity","notes"],
+  "Beads":            ["brand","colorName","colorNumber","beadType","size","quantity","notes"],
+  "Buttons":          ["brand","color","size","quantity","notes"],
+  "Trim":             ["brand","trimType","color","width","length","quantity","notes"],
+  "Scissors":         ["brand","description","color","notes"],
+  "Hoops & Frames":   ["brand","frameType","size","material","color","notes"],
+  "_custom":          ["name","brand","color","size","quantity","notes"],
+};
+const NOTION_LABELS = {
+  brand:"Brand / Maker", needleSize:"Needle Size", quantity:"Qty",
+  condition:"Condition", notes:"Notes", description:"Description",
+  material:"Material / Type", color:"Color", colorName:"Color Name",
+  colorNumber:"Color #", pieceType:"Piece Type", beadType:"Bead Type",
+  trimType:"Trim Type", width:"Width", length:"Length",
+  frameType:"Frame Type", name:"Item Name", size:"Size",
+};
+const NOTION_PLACEHOLDERS = {
+  brand:"e.g. DMC, Mill Hill, Wichelt",
+  needleSize:"24", quantity:"1", condition:"New",
+  notes:"Any extra details…",
+  description:"e.g. Garden fairy, silver magnetic",
+  material:"e.g. Magnet, Ceramic, Enamel",
+  color:"e.g. Silver, Gold, Blue",
+  colorName:"e.g. Cardinal Red", colorNumber:"e.g. 321",
+  pieceType:"e.g. Scroll frame, Q-snap, Stretcher bars",
+  beadType:"e.g. Seed, Bugle, Crystal",
+  trimType:"e.g. Ribbon, Lace, Cord",
+  width:'e.g. ½"', length:"e.g. 2 yards",
+  frameType:"e.g. Hoop, Scroll, Q-snap",
+  name:"e.g. Thread Heaven, needle threader",
+  size:'e.g. 18"×24", 6" hoop',
+};
+const NOTION_TYPE_EMOJI = {
+  "Needles":"🪡","Needle Minders":"🧲","Floss Drops":"🎀",
+  "Finishing Pieces":"🖼️","Beads":"📿","Buttons":"🔘",
+  "Trim":"✂️","Scissors":"✂️","Hoops & Frames":"⭕","_custom":"🎁"
+};
+const NOTION_TYPE_COLOR = {
+  "Needles":"#1565c0","Needle Minders":"#7c5c8a","Floss Drops":"#c4758a",
+  "Finishing Pieces":"#2e7d32","Beads":"#b8520a","Buttons":"#c4758a",
+  "Trim":"#6a8f6a","Scissors":"#6a1b9a","Hoops & Frames":"#4a7c6a","_custom":"#6a5078"
+};
+
+function NotionCategoryForm({ existingNames, onSave, onClose }) {
+  const [catName, setCatName] = useState("");
+  const [emoji, setEmoji] = useState("✨");
+  const handleSave = () => {
+    const name = catName.trim();
+    if (!name) return;
+    if (existingNames.includes(name)) { alert("That category already exists!"); return; }
+    onSave(name, emoji);
+  };
+  return (
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 1rem"}}>
+        <Field label="Category Name" span>
+          <input style={inputStyle} value={catName} onChange={e=>setCatName(e.target.value)} placeholder="e.g. Toys, Accessories, Thread Conditioner" autoFocus/>
+        </Field>
+        <Field label="Emoji Icon">
+          <input style={{...inputStyle,width:80,textAlign:"center",fontSize:"1.4rem"}} value={emoji} onChange={e=>setEmoji(e.target.value)} maxLength={2}/>
+        </Field>
+      </div>
+      <div style={{fontSize:"0.75rem",fontFamily:"'Lora',serif",color:"#8a6e9a",marginTop:"0.25rem"}}>Tip: paste any emoji — 🧶 🪢 💎 🎀 🪡 🎁 🔮 🧸</div>
+      <div style={{display:"flex",gap:"0.75rem",justifyContent:"flex-end",marginTop:"1rem"}}>
+        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={handleSave}>Add Category</Btn>
+      </div>
+    </div>
+  );
+}
+
+function NotionForm({ initial={}, notionType, onSave, onClose }) {
+  const [f, setF] = useState({
+    notionType: notionType||"Needles",
+    brand:"", needleSize:"24", needleSizeOther:"", quantity:"1",
+    condition:"", notes:"", description:"", material:"",
+    color:"", colorName:"", colorNumber:"", pieceType:"",
+    beadType:"", trimType:"", width:"", length:"",
+    frameType:"", name:"", size:"",
+    ...initial
+  });
+  const u = k => e => setF(p=>({...p,[k]:e.target.value}));
+  const fields = NOTION_FIELDS[f.notionType] || NOTION_FIELDS["_custom"];
+
+  return (
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 1rem"}}>
+        {fields.map(key => {
+          if (key==="needleSize") return (
+            <Field key={key} label="Needle Size">
+              <select style={selectStyle} value={f.needleSize} onChange={u("needleSize")}>
+                {NEEDLE_SIZES.map(s=><option key={s}>{s}</option>)}
+              </select>
+              {f.needleSize==="Other" && <input style={{...inputStyle,marginTop:"0.4rem"}} value={f.needleSizeOther||""} onChange={u("needleSizeOther")} placeholder="e.g. 22, 30, tapestry…"/>}
+            </Field>
+          );
+          if (key==="notes") return (
+            <Field key={key} label="Notes" span>
+              <textarea style={textareaStyle} value={f[key]||""} onChange={u(key)} placeholder={NOTION_PLACEHOLDERS[key]||""}/>
+            </Field>
+          );
+          return (
+            <Field key={key} label={NOTION_LABELS[key]||key}>
+              <input style={inputStyle} value={f[key]||""} onChange={u(key)} placeholder={NOTION_PLACEHOLDERS[key]||""}/>
+            </Field>
+          );
+        })}
+      </div>
+      <div style={{display:"flex",gap:"0.75rem",justifyContent:"flex-end",marginTop:"1.25rem"}}>
+        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={()=>onSave(f)}>Save Item</Btn>
+      </div>
+    </div>
+  );
+}
+
+function NotionItemCard({ item, onEdit, onDelete, onAddToShop }) {
+  const fields = NOTION_FIELDS[item.notionType] || NOTION_FIELDS["_custom"];
+  const displayName =
+    item.name || item.description || item.colorName ||
+    (item.needleSize ? (item.needleSize==="Other" ? item.needleSizeOther : `Size ${item.needleSize}`) : "") ||
+    item.pieceType || item.trimType || item.frameType || item.beadType || "";
+
+  const shopItem = () => {
+    const label = [item.brand, displayName].filter(Boolean).join(" – ") || item.notionType;
+    onAddToShop({ item:label, category:"Notions", quantity:item.quantity||"1",
+      size:item.size||item.width||"", placeToBuy:"", notes:"", otherCategory:"", bought:false });
+  };
+
+  return (
+    <div style={{background:"#fefcfa",border:"1.5px solid #e2d4e8",borderRadius:"0.75rem",padding:"1.1rem",boxShadow:"0 2px 8px rgba(100,70,130,0.07)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"0.5rem"}}>
+        <div style={{flex:1,fontFamily:"'Playfair Display',serif",fontSize:"1rem",color:"#2d1f3a",fontWeight:600,lineHeight:1.3}}>
+          {item.brand
+            ? <>{item.brand}{displayName && <span style={{fontWeight:400,color:"#6a5078"}}> — {displayName}</span>}</>
+            : displayName || <span style={{color:"#8a6e9a",fontStyle:"italic"}}>Item</span>}
+        </div>
+        <div style={{display:"flex",gap:"0.25rem",marginLeft:"0.5rem",flexShrink:0}}>
+          <button title="Add to Shopping List" onClick={shopItem} style={{background:"none",border:"none",cursor:"pointer",color:"#2e7d32",padding:"2px 4px"}}><Icon name="cart" size={14}/></button>
+          <button onClick={()=>onEdit(item)} style={{background:"none",border:"none",cursor:"pointer",color:"#8a6e9a",padding:"2px 4px"}}><Icon name="edit" size={14}/></button>
+          <button onClick={()=>onDelete(item.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#c0392b",padding:"2px 4px"}}><Icon name="trash" size={14}/></button>
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.2rem 0.75rem",marginTop:"0.4rem"}}>
+        {fields.filter(k=>k!=="notes"&&k!=="brand"&&k!=="name"&&k!=="description").map(k => {
+          let val = item[k]||"";
+          if (k==="needleSize") val = item.needleSize==="Other" ? item.needleSizeOther : item.needleSize;
+          return val ? (
+            <div key={k} style={{fontSize:"0.79rem",fontFamily:"'Lora',serif",color:"#5a4060"}}>
+              <span style={{color:"#8a6e9a"}}>{NOTION_LABELS[k]||k}: </span>{val}
+            </div>
+          ) : null;
+        })}
+      </div>
+      {item.notes && <div style={{marginTop:"0.6rem",fontSize:"0.79rem",fontFamily:"'Lora',serif",color:"#6a5078",fontStyle:"italic",borderTop:"1px dashed #ddc8ea",paddingTop:"0.5rem"}}>{item.notes}</div>}
+    </div>
+  );
+}
+
+// ===== WISHLIST =====
+function WishlistForm({ initial={}, onSave, onClose }) {
+  const [f,setF] = useState({item:"",category:"Chart",designer:"",link:"",price:"",priority:"Medium",notes:"",...initial});
+  const u = k => e => setF(p=>({...p,[k]:e.target.value}));
+  return (
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 1rem"}}>
+        <Field label="Item Name" span><input style={inputStyle} value={f.item} onChange={u("item")} placeholder="e.g. Lavender & Lace - Woodland Faerie"/></Field>
+        <Field label="Category">
+          <select style={selectStyle} value={f.category} onChange={u("category")}>
+            {["Chart","Floss","Fabric","Finishing Piece","Frame","Tool","Book","Other"].map(c=><option key={c}>{c}</option>)}
+          </select>
+        </Field>
+        <Field label="Priority">
+          <select style={selectStyle} value={f.priority} onChange={u("priority")}>
+            {["Low","Medium","High","Must Have!"].map(p=><option key={p}>{p}</option>)}
+          </select>
+        </Field>
+        <Field label="Designer / Maker"><input style={inputStyle} value={f.designer} onChange={u("designer")}/></Field>
+        <Field label="Estimated Price"><input style={inputStyle} value={f.price} onChange={u("price")} placeholder="e.g. $14.99"/></Field>
+        <Field label="Link / Where to Buy" span><input style={inputStyle} value={f.link} onChange={u("link")} placeholder="URL or shop name"/></Field>
+        <Field label="Notes" span><textarea style={{...textareaStyle,minHeight:56}} value={f.notes} onChange={u("notes")}/></Field>
+      </div>
+      <div style={{display:"flex",gap:"0.75rem",justifyContent:"flex-end"}}>
+        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={()=>onSave(f)}>Save to Wishlist</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ===== GENERIC ITEM CARD =====
+function ItemCard({ item, fields, onEdit, onDelete }) {
+  return (
+    <div style={{background:"#fefcfa",border:"1.5px solid #e2d4e8",borderRadius:"0.75rem",padding:"1.1rem",boxShadow:"0 2px 8px rgba(100,70,130,0.07)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"0.5rem"}}>
+        <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:"1rem",color:"#2d1f3a",margin:0,flex:1}}>{item[fields[0].key]||"Untitled"}</h3>
+        <div style={{display:"flex",gap:"0.4rem",marginLeft:"0.5rem"}}>
+          <button onClick={()=>onEdit(item)} style={{background:"none",border:"none",cursor:"pointer",color:"#8a6e9a",padding:"2px"}}><Icon name="edit" size={14}/></button>
+          <button onClick={()=>onDelete(item.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#c0392b",padding:"2px"}}><Icon name="trash" size={14}/></button>
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.25rem 1rem"}}>
+        {fields.slice(1).map(({key,label,span})=>item[key]?(
+          <div key={key} style={{fontSize:"0.82rem",fontFamily:"'Lora',serif",color:"#5a4060",gridColumn:span?"1/-1":undefined}}>
+            <span style={{color:"#8a6e9a"}}>{label}: </span>{item[key]}
+          </div>
+        ):null)}
+      </div>
+    </div>
+  );
+}
+
+// ===== MAIN APP =====
+export default function StitchKeeper() {
+  const [data, setData] = useLocalData();
+  const [tab, setTab] = useState("projects");
+  const [modal, setModal] = useState(null);
+  const [progressModal, setProgressModal] = useState(null);
+  const [search, setSearch] = useState("");
+  const [sortCharts, setSortCharts] = useState("none");
+  const [sortFlosses, setSortFlosses] = useState("none");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState(null);
+  const [notionFilter, setNotionFilter] = useState("");
+  const [selectedNotion, setSelectedNotion] = useState(null);
+  const [selectedDesigner, setSelectedDesigner] = useState(null);
+  const [selectedBrand, setSelectedBrand] = useState(null);
+  const [selectedCount, setSelectedCount] = useState(null);
+  const [chartSearch, setChartSearch] = useState("");
+  const [sortFabrics, setSortFabrics] = useState("none");
+
+  const uid = () => Math.random().toString(36).slice(2)+Date.now().toString(36);
+  const addItem    = (s,item) => { setData({...data,[s]:[...data[s],{...item,id:uid(),createdAt:new Date().toISOString()}]}); setModal(null); };
+  const updateItem = (s,item) => { setData({...data,[s]:data[s].map(i=>i.id===item.id?item:i)}); setModal(null); };
+  const deleteItem = (s,id)   => setData({...data,[s]:data[s].filter(i=>i.id!==id)});
+  const handleSave = (s) => (item) => modal?.item?.id ? updateItem(s,{...modal.item,...item}) : addItem(s,item);
+  const allNotionTypes = [...NOTION_TYPES_DEFAULT, ...(data.notionCategories||[]).map(c=>c.name)];
+  const addNotionCategory    = (name,emoji) => { const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36); const d={...data,notionCategories:[...(data.notionCategories||[]),{id:uid(),name,emoji:emoji||"✨",createdAt:new Date().toISOString()}]}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{}; };
+  const deleteNotionCategory = (id)  => { const cat=(data.notionCategories||[]).find(c=>c.id===id); if(!cat) return; if(!window.confirm(`Delete category "${cat.name}" and all its items?`)) return; const d={...data,notionCategories:(data.notionCategories||[]).filter(c=>c.id!==id),notions:(data.notions||[]).filter(n=>n.notionType!==cat.name)}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{}; };
+  const addNotion    = (n) => { const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36); const d={...data,notions:[...(data.notions||[]),{...n,id:uid(),createdAt:new Date().toISOString()}]}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{}; };
+  const updateNotion = (n) => { const d={...data,notions:(data.notions||[]).map(x=>x.id===n.id?n:x)}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{}; };
+  const deleteNotion = (id) => { const d={...data,notions:(data.notions||[]).filter(x=>x.id!==id)}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{}; };
+  const addToShop = (item) => { const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36); const d={...data,shoppingList:[...(data.shoppingList||[]),{...item,id:uid(),createdAt:new Date().toISOString()}]}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{}; };
+  const addChart    = (c) => { const d={...data,charts:[...data.charts,c]}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{} };
+  const updateChart = (c) => { const d={...data,charts:data.charts.map(x=>x.id===c.id?c:x)}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{} };
+  const deleteChart = (id) => { const d={...data,charts:data.charts.filter(x=>x.id!==id)}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{} };
+  const addFabricPiece    = (f) => { const d={...data,fabrics:[...data.fabrics,f]}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{} };
+  const updateFabricPiece = (f) => { const d={...data,fabrics:data.fabrics.map(x=>x.id===f.id?f:x)}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{} };
+  const deleteFabricPiece = (id) => { const d={...data,fabrics:data.fabrics.filter(x=>x.id!==id)}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{} };
+  const addFloss    = (f) => { const d={...data,flosses:[...data.flosses,f]}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{} };
+  const updateFloss = (f) => { const d={...data,flosses:data.flosses.map(x=>x.id===f.id?f:x)}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{} };
+  const deleteFloss = (id) => { const d={...data,flosses:data.flosses.filter(x=>x.id!==id)}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{} };
+  const filter = (items,keys) => !search ? items : items.filter(i=>keys.some(k=>(i[k]||"").toLowerCase().includes(search.toLowerCase())));
+
+  const sortAndGroup = (items, sortKey, groupKey) => {
+    if (sortKey === "none") return { grouped: false, items };
+    const sorted = [...items].sort((a,b) => (a[groupKey]||"(No Designer)").localeCompare(b[groupKey]||"(No Designer)"));
+    const groups = {};
+    sorted.forEach(item => {
+      const key = item[groupKey] || "(No Designer)";
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
+    });
+    return { grouped: true, groups };
+  };
+
+  const tabs = [
+    {id:"projects",label:"Projects",icon:"needle"},
+    {id:"charts",label:"Charts",icon:"chart"},
+    {id:"fabrics",label:"Fabric",icon:"fabric"},
+    {id:"flosses",label:"Floss",icon:"thread"},
+    {id:"notions",label:"Notions",icon:"notions"},
+    {id:"wishlist",label:"Wish List",icon:"wishlist"},
+    {id:"shopping",label:"Shopping",icon:"cart"},
+    {id:"calculator",label:"Calculator",icon:"calc"},
+  ];
+
+  const priorityColor = {"Low":"#2e7d32","Medium":"#e65100","High":"#c62828","Must Have!":"#6a1b9a"};
+
+  return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#f9f5fc 0%,#f3f7f0 50%,#fcf5f7 100%)",fontFamily:"'Lora',serif"}}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+        *{box-sizing:border-box;}
+        ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#f7f3f0}::-webkit-scrollbar-thumb{background:#b89ac8;border-radius:3px}
+        button:hover{opacity:0.85}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+      `}</style>
+
+      {/* Header */}
+      <header style={{background:"#4a3550",padding:"1.1rem 2rem",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 4px 20px rgba(0,0,0,0.3)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:"1rem"}}>
+          <div style={{width:44,height:44,background:"linear-gradient(135deg,#c4a8d4,#e8a8be)",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 10px rgba(196,168,212,0.5)"}}>
+            <svg width={26} height={26} viewBox="0 0 24 24" fill="none">
+              {/* Needle body - thin diagonal rod */}
+              <line x1="5" y1="19" x2="17" y2="4" stroke="#4a3550" strokeWidth="1.8" strokeLinecap="round"/>
+              {/* Needle eye - small oval hole near top */}
+              <ellipse cx="16.2" cy="4.8" rx="1.4" ry="0.8" transform="rotate(-35 16.2 4.8)" stroke="#4a3550" strokeWidth="1.3" fill="none"/>
+              {/* Needle point at bottom */}
+              <line x1="5" y1="19" x2="4.2" y2="20.5" stroke="#4a3550" strokeWidth="1.6" strokeLinecap="round"/>
+              {/* Thread coming through eye - flowing curve */}
+              <path d="M16.5 3.5 C18 2 20 3 19.5 5 C19 7 17 7.5 16 9 C15 10.5 15.5 12 14 13" stroke="#c4758a" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+              {/* Thread tail flowing down */}
+              <path d="M14 13 C13 14.5 11 15 10 16.5 C9 18 9.5 20 8 21" stroke="#c4758a" strokeWidth="1.5" strokeLinecap="round" fill="none" strokeDasharray="1.5 1"/>
+            </svg>
+          </div>
+          <div>
+            <h1 style={{margin:0,fontFamily:"'Playfair Display',serif",fontSize:"1.45rem",color:"#f3edf8",letterSpacing:"0.01em"}}>StitchKeeper</h1>
+            <div style={{color:"#8a6e9a",fontSize:"0.68rem",letterSpacing:"0.12em",textTransform:"uppercase"}}>Your Cross Stitch Companion 🌸</div>
+          </div>
+        </div>
+        <div style={{color:"#8a6e9a",fontSize:"0.78rem",fontFamily:"'Playfair Display',serif",fontStyle:"italic",textAlign:"right"}}>
+          {data.projects.length} projects · {data.charts.length} charts
+        </div>
+      </header>
+
+      {/* Tab nav */}
+      <nav style={{background:"#3a2840",display:"flex",padding:"0 1rem",overflowX:"auto"}}>
+        {tabs.map(t=>(
+          <button key={t.id} onClick={()=>{setTab(t.id);setSearch("");setStatusFilter("");setSelectedBrand(null);setSelectedCount(null);setSelectedDesigner(null);setChartSearch("");setNotionFilter("");setSelectedNotion(null);setSelectedStatus(null);}}
+            style={{background:"none",border:"none",cursor:"pointer",padding:"0.85rem 1rem",display:"flex",alignItems:"center",gap:"0.42rem",
+              color:tab===t.id?"#d4aee8":"#a888bc",fontFamily:"'Lora',serif",fontSize:"0.82rem",fontWeight:600,
+              borderBottom:tab===t.id?"2.5px solid #d4aee8":"2.5px solid transparent",whiteSpace:"nowrap",transition:"all 0.14s"}}>
+            <Icon name={t.icon} size={14}/>{t.label}
+          </button>
+        ))}
+      </nav>
+
+      <main style={{maxWidth:980,margin:"0 auto",padding:"2rem 1.5rem"}}>
+
+        {/* PROJECTS */}
+        {tab==="projects" && (
+          <div>
+            {selectedStatus ? (
+              /* ── Status drill-down ── */
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:"1rem",marginBottom:"1.5rem",flexWrap:"wrap"}}>
+                  <button onClick={()=>{setSelectedStatus(null);setSearch("");}}
+                    style={{background:"none",border:"1.5px solid #d4c2e0",cursor:"pointer",color:"#7c5c8a",display:"flex",alignItems:"center",gap:"0.4rem",fontFamily:"'Lora',serif",fontSize:"0.9rem",fontWeight:600,padding:"0.4rem 0.75rem",borderRadius:"0.5rem"}}>
+                    <Icon name="back" size={16}/> All Statuses
+                  </button>
+                  <div style={{flex:1}}>
+                    <h2 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#2d1f3a",fontSize:"1.4rem"}}>
+                      {STATUS_META.find(s=>s.label===selectedStatus)?.emoji} {selectedStatus}
+                    </h2>
+                    <div style={{color:"#8a6e9a",fontSize:"0.78rem"}}>
+                      {(data.projects||[]).filter(p=>p.status===selectedStatus).length} project{(data.projects||[]).filter(p=>p.status===selectedStatus).length!==1?"s":""}
+                    </div>
+                  </div>
+                  <SearchBar value={search} onChange={setSearch}/>
+                  <Btn onClick={()=>setModal({type:"project",preset:selectedStatus})}><Icon name="plus" size={14}/>New Project</Btn>
+                </div>
+                {(() => {
+                  const statusProjects = (data.projects||[]).filter(p=>p.status===selectedStatus);
+                  const filtered = statusProjects.filter(p => {
+                    if (!search) return true;
+                    const s = search.toLowerCase();
+                    return ["title","pattern","fabric","fabricCount","flossColors","designer"].some(k=>(p[k]||"").toLowerCase().includes(s));
+                  });
+                  const meta = STATUS_META.find(s=>s.label===selectedStatus)||{};
+                  if (statusProjects.length===0) return <EmptyState emoji={meta.emoji||"🧵"} title={`No ${selectedStatus} projects yet`} sub="Click New Project to add one, or update a project's status."/>;
+                  if (filtered.length===0) return <EmptyState emoji="🔍" title="No projects match" sub="Try a different search term."/>;
+                  return (
+                    <div>
+                      {search && <div style={{fontSize:"0.8rem",fontFamily:"'Lora',serif",color:"#8a6e9a",marginBottom:"1rem"}}>{filtered.length} of {statusProjects.length} project{statusProjects.length!==1?"s":""}</div>}
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:"1rem"}}>
+                        {filtered.map(p=>(
+                          <ProjectCard key={p.id} p={p}
+                            onEdit={p=>setModal({type:"project",item:p})}
+                            onDelete={id=>deleteItem("projects",id)}
+                            onProgress={p=>setProgressModal(p)}/>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              /* ── Status card grid ── */
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:"1rem",marginBottom:"1.5rem",flexWrap:"wrap"}}>
+                  <div style={{flex:1,minWidth:160}}>
+                    <h2 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#2d1f3a",fontSize:"1.4rem"}}>My Projects</h2>
+                    <div style={{color:"#8a6e9a",fontSize:"0.78rem"}}>
+                      {(data.projects||[]).length} project{(data.projects||[]).length!==1?"s":""}
+                    </div>
+                  </div>
+                  <SearchBar value={search} onChange={setSearch}/>
+                  <Btn onClick={()=>setModal({type:"project"})}><Icon name="plus" size={14}/>New Project</Btn>
+                </div>
+                {search ? (
+                  /* search mode — flat list across all statuses */
+                  (() => {
+                    const filtered = (data.projects||[]).filter(p => {
+                      const s = search.toLowerCase();
+                      return ["title","pattern","fabric","fabricCount","flossColors","designer"].some(k=>(p[k]||"").toLowerCase().includes(s));
+                    });
+                    if (filtered.length===0) return <EmptyState emoji="🔍" title="No projects match" sub="Try a different search term."/>;
+                    return (
+                      <div>
+                        <div style={{fontSize:"0.8rem",fontFamily:"'Lora',serif",color:"#8a6e9a",marginBottom:"1rem"}}>{filtered.length} project{filtered.length!==1?"s":""} matching "<strong style={{color:"#7c5c8a"}}>{search}</strong>" <button onClick={()=>setSearch("")} style={{background:"none",border:"1px solid #d4c2e0",borderRadius:"999px",padding:"0.1rem 0.5rem",cursor:"pointer",fontFamily:"'Lora',serif",fontSize:"0.73rem",color:"#8a6e9a",marginLeft:"0.4rem"}}>✕ Clear</button></div>
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:"1rem"}}>
+                          {filtered.map(p=><ProjectCard key={p.id} p={p} onEdit={p=>setModal({type:"project",item:p})} onDelete={id=>deleteItem("projects",id)} onProgress={p=>setProgressModal(p)}/>)}
+                        </div>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  /* normal mode — status cards */
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:"1rem"}}>
+                    {STATUS_META.map(({label,color,bg,emoji}) => {
+                      const count = (data.projects||[]).filter(p=>p.status===label).length;
+                      const inProgressPcts = label==="In Progress"
+                        ? (data.projects||[]).filter(p=>p.status==="In Progress"&&(p.progressPct||0)>0)
+                        : [];
+                      const avgPct = inProgressPcts.length>0
+                        ? Math.round(inProgressPcts.reduce((s,p)=>s+(p.progressPct||0),0)/inProgressPcts.length)
+                        : null;
+                      return (
+                        <div key={label} onClick={()=>{setSelectedStatus(label);setSearch("");}}
+                          style={{background:"#fefcfa",border:`1.5px solid #e2d4e8`,borderRadius:"1rem",overflow:"hidden",cursor:"pointer",transition:"all 0.15s",boxShadow:"0 2px 8px rgba(100,70,130,0.07)"}}
+                          onMouseEnter={e=>{e.currentTarget.style.borderColor=color;e.currentTarget.style.boxShadow="0 4px 16px rgba(100,70,130,0.14)";e.currentTarget.style.transform="translateY(-2px)";}}
+                          onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2d4e8";e.currentTarget.style.boxShadow="0 2px 8px rgba(100,70,130,0.07)";e.currentTarget.style.transform="none";}}>
+                          <div style={{height:72,background:`linear-gradient(135deg,${color}22,${color}44)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"2.2rem",borderBottom:"1px solid #e2d4e8"}}>
+                            {emoji}
+                          </div>
+                          <div style={{padding:"0.9rem 1.1rem"}}>
+                            <div style={{fontFamily:"'Playfair Display',serif",fontSize:"1rem",color:"#2d1f3a",fontWeight:600,marginBottom:"0.4rem"}}>{label}</div>
+                            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"0.4rem",flexWrap:"wrap"}}>
+                              <Badge color={color}>{count} project{count!==1?"s":""}</Badge>
+                              <span style={{fontSize:"0.78rem",color:"#7c5c8a",fontFamily:"'Lora',serif",fontWeight:600}}>View →</span>
+                            </div>
+                            {label==="In Progress" && avgPct!==null && (
+                              <div style={{marginTop:"0.5rem"}}>
+                                <div style={{height:5,background:"#e8d8f0",borderRadius:"999px",overflow:"hidden"}}>
+                                  <div style={{height:"100%",width:`${avgPct}%`,background:`linear-gradient(90deg,${color}88,${color})`,borderRadius:"999px"}}/>
+                                </div>
+                                <div style={{fontSize:"0.7rem",color:"#8a6e9a",marginTop:"0.2rem",fontFamily:"'Lora',serif"}}>avg {avgPct}% done</div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CHARTS */}
+        {/* CHARTS */}
+        {tab==="charts" && (
+          <div>
+            {selectedDesigner ? (
+              /* ── Designer drill-down ── */
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:"1rem",marginBottom:"1.5rem",flexWrap:"wrap"}}>
+                  <button onClick={()=>{setSelectedDesigner(null);setChartSearch("");}} style={{background:"none",border:"1.5px solid #d4c2e0",cursor:"pointer",color:"#7c5c8a",display:"flex",alignItems:"center",gap:"0.4rem",fontFamily:"'Lora',serif",fontSize:"0.9rem",fontWeight:600,padding:"0.4rem 0.75rem",borderRadius:"0.5rem"}}>
+                    <Icon name="back" size={16}/> All Designers
+                  </button>
+                  <div style={{flex:1}}>
+                    <h2 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#2d1f3a",fontSize:"1.4rem"}}>{selectedDesigner.name}</h2>
+                    {selectedDesigner.website && <a href={selectedDesigner.website.startsWith("http")?selectedDesigner.website:"https://"+selectedDesigner.website} target="_blank" rel="noreferrer" style={{color:"#7c5c8a",fontSize:"0.78rem"}}>{selectedDesigner.website}</a>}
+                  </div>
+                  {/* Filters */}
+                  <select style={{...selectStyle,width:"auto",padding:"0.45rem 0.7rem",fontSize:"0.82rem"}} value={chartSearch.startsWith("season:")?chartSearch.replace("season:",""):""} onChange={e=>setChartSearch(e.target.value?"season:"+e.target.value:"")}>
+                    <option value="">All Seasons</option>
+                    {SEASONS.filter(Boolean).map(s=><option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <select style={{...selectStyle,width:"auto",padding:"0.45rem 0.7rem",fontSize:"0.82rem"}} value={chartSearch.startsWith("holiday:")?chartSearch.replace("holiday:",""):""} onChange={e=>setChartSearch(e.target.value?"holiday:"+e.target.value:"")}>
+                    <option value="">All Holidays</option>
+                    {HOLIDAYS.filter(Boolean).map(h=><option key={h} value={h}>{h}</option>)}
+                  </select>
+                  <select style={{...selectStyle,width:"auto",padding:"0.45rem 0.7rem",fontSize:"0.82rem"}} value={chartSearch.startsWith("theme:")?chartSearch.replace("theme:",""):""} onChange={e=>setChartSearch(e.target.value?"theme:"+e.target.value:"")}>
+                    <option value="">All Themes</option>
+                    {THEMES.filter(Boolean).map(t=><option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <div style={{position:"relative"}}>
+                    <input value={chartSearch.startsWith("season:")||chartSearch.startsWith("holiday:")||chartSearch.startsWith("theme:")?"":(chartSearch||"")} onChange={e=>setChartSearch(e.target.value)} placeholder="Search charts…" style={{...inputStyle,paddingLeft:"2rem",width:170,fontSize:"0.85rem"}}/>
+                    <svg style={{position:"absolute",left:"0.6rem",top:"50%",transform:"translateY(-50%)"}} width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="#8a6e9a" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  </div>
+                  <Btn small variant="secondary" onClick={()=>setModal({type:"designer",item:selectedDesigner})}><Icon name="edit" size={13}/>Edit</Btn>
+                  <Btn small onClick={()=>setModal({type:"chart",designerId:selectedDesigner.id})}><Icon name="plus" size={13}/>Add Chart</Btn>
+                </div>
+                {(() => {
+                  const designerCharts = data.charts.filter(c=>c.designerId===selectedDesigner.id);
+                  const filtered = designerCharts.filter(c => {
+                    if (!chartSearch) return true;
+                    if (chartSearch.startsWith("season:"))  return c.season === chartSearch.replace("season:","");
+                    if (chartSearch.startsWith("holiday:")) { const val=chartSearch.replace("holiday:",""); return c.holiday===val||(c.holiday==="Other"&&(c.holidayOther||"").toLowerCase().includes(val.toLowerCase())); }
+                    if (chartSearch.startsWith("theme:"))   { const val=chartSearch.replace("theme:","");   return c.theme===val||(c.theme==="Other"&&(c.themeOther||"").toLowerCase().includes(val.toLowerCase())); }
+                    const s = chartSearch.toLowerCase();
+                    return ["title","purchasedFrom","notes","season","holiday","holidayOther","theme","themeOther"].some(k=>(c[k]||"").toLowerCase().includes(s));
+                  });
+                  if (filtered.length===0) return <EmptyState emoji="📋" title="No charts found" sub={designerCharts.length===0?"Add a chart for this designer to get started.":"Try adjusting your search or filters."}/>;
+                  return (
+                    <div>
+                      <div style={{fontSize:"0.8rem",fontFamily:"'Lora',serif",color:"#8a6e9a",marginBottom:"1rem"}}>{filtered.length} chart{filtered.length!==1?"s":""}{chartSearch?" matching filter":""}</div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))",gap:"1rem"}}>
+                        {filtered.map(c=><ChartCard key={c.id} c={c} onEdit={c=>setModal({type:"chart",item:c,designerId:selectedDesigner.id})} onDelete={deleteChart}/>)}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              /* ── Designer list ── */
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:"1rem",marginBottom:"1.5rem",flexWrap:"wrap"}}>
+                  <div style={{flex:1,minWidth:160}}>
+                    <h2 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#2d1f3a",fontSize:"1.4rem"}}>Chart Library</h2>
+                    <div style={{color:"#8a6e9a",fontSize:"0.78rem"}}>
+                      {(data.chartDesigners||[]).length} designer{(data.chartDesigners||[]).length!==1?"s":""} · {data.charts.length} chart{data.charts.length!==1?"s":""}
+                    </div>
+                  </div>
+                  {/* Global search across all designers */}
+                  <div style={{position:"relative",flex:1,minWidth:180,maxWidth:320}}>
+                    <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search all charts…" style={{...inputStyle,paddingLeft:"2rem",fontSize:"0.88rem"}}/>
+                    <svg style={{position:"absolute",left:"0.65rem",top:"50%",transform:"translateY(-50%)"}} width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="#8a6e9a" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  </div>
+                  <Btn onClick={()=>setModal({type:"designer"})}><Icon name="plus" size={14}/>Add Designer</Btn>
+                </div>
+
+                {/* Global search results */}
+                {search ? (
+                  <div>
+                    {(() => {
+                      const globalFiltered = data.charts.filter(c => {
+                        const s = search.toLowerCase();
+                        return ["title","purchasedFrom","notes","season","holiday","holidayOther","theme","themeOther"].some(k=>(c[k]||"").toLowerCase().includes(s));
+                      });
+                      const designerMap = Object.fromEntries((data.chartDesigners||[]).map(d=>[d.id,d.name]));
+                      if (globalFiltered.length===0) return <EmptyState emoji="🔍" title="No charts match your search" sub="Try a different term or clear the search."/>;
+                      return (
+                        <div>
+                          <div style={{fontSize:"0.8rem",fontFamily:"'Lora',serif",color:"#8a6e9a",marginBottom:"1rem"}}>{globalFiltered.length} chart{globalFiltered.length!==1?"s":""} matching "{search}"</div>
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))",gap:"1rem"}}>
+                            {globalFiltered.map(c=>{
+                              const dName = designerMap[c.designerId]||"";
+                              return (
+                                <div key={c.id}>
+                                  {dName && <div style={{fontSize:"0.75rem",fontFamily:"'Lora',serif",color:"#8a6e9a",marginBottom:"0.3rem",fontWeight:600}}>{dName}</div>}
+                                  <ChartCard c={c} onEdit={c=>setModal({type:"chart",item:c,designerId:c.designerId})} onDelete={deleteChart}/>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  /* Designer cards grid */
+                  (data.chartDesigners||[]).length === 0
+                    ? <EmptyState emoji="📋" title="No designers yet" sub="Add a designer to start building your chart library."/>
+                    : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:"1rem"}}>
+                        {[...(data.chartDesigners||[])].sort((a,b)=>a.name.localeCompare(b.name)).map(d => {
+                          const dCharts = data.charts.filter(c=>c.designerId===d.id);
+                          const seasons  = [...new Set(dCharts.map(c=>c.season).filter(Boolean))];
+                          const holidays = [...new Set(dCharts.map(c=>c.holiday==="Other"?c.holidayOther:c.holiday).filter(Boolean))];
+                          const themes   = [...new Set(dCharts.map(c=>c.theme==="Other"?c.themeOther:c.theme).filter(Boolean))];
+                          const thumb    = dCharts.find(c=>c.fileData&&c.fileType?.startsWith("image/"));
+                          return (
+                            <div key={d.id} onClick={()=>{setSelectedDesigner(d);setChartSearch("");}}
+                              style={{background:"#fefcfa",border:"1.5px solid #e2d4e8",borderRadius:"1rem",overflow:"hidden",cursor:"pointer",transition:"all 0.15s",boxShadow:"0 2px 8px rgba(100,70,130,0.07)"}}
+                              onMouseEnter={e=>{e.currentTarget.style.borderColor="#c4a8d4";e.currentTarget.style.boxShadow="0 4px 16px rgba(100,70,130,0.14)";e.currentTarget.style.transform="translateY(-2px)";}}
+                              onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2d4e8";e.currentTarget.style.boxShadow="0 2px 8px rgba(100,70,130,0.07)";e.currentTarget.style.transform="none";}}>
+                              {/* Thumbnail strip */}
+                              {thumb
+                                ? <div style={{height:90,overflow:"hidden",background:"#e8d8f0"}}><img src={thumb.fileData} alt={d.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/></div>
+                                : <div style={{height:90,background:"linear-gradient(135deg,#eddff5,#fce8f0)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"2.5rem"}}>📋</div>
+                              }
+                              <div style={{padding:"1rem 1.1rem"}}>
+                                <div style={{fontFamily:"'Playfair Display',serif",fontSize:"1.1rem",color:"#2d1f3a",fontWeight:600,marginBottom:"0.5rem"}}>{d.name}</div>
+                                <div style={{display:"flex",gap:"0.4rem",flexWrap:"wrap",marginBottom:"0.5rem"}}>
+                                  <Badge color="#7c5c8a">{dCharts.length} chart{dCharts.length!==1?"s":""}</Badge>
+                                  {seasons.slice(0,2).map(s=><Badge key={s} color={{"Fall":"#b8520a","Winter":"#1565c0","Spring":"#2e7d32","Summer":"#e65100"}[s]||"#7c5c8a"}>{s}</Badge>)}
+                                </div>
+                                {(holidays.length>0||themes.length>0) && (
+                                  <div style={{fontSize:"0.73rem",fontFamily:"'Lora',serif",color:"#8a6e9a",lineHeight:1.5}}>
+                                    {holidays.slice(0,2).join(" · ")}{holidays.length>2?" …":""}
+                                    {holidays.length>0&&themes.length>0?" · ":""}
+                                    {themes.slice(0,2).join(" · ")}{themes.length>2?" …":""}
+                                  </div>
+                                )}
+                                {d.notes && <div style={{fontSize:"0.74rem",color:"#8a6e9a",fontStyle:"italic",marginTop:"0.35rem"}}>{d.notes}</div>}
+                                <div style={{marginTop:"0.65rem",fontSize:"0.78rem",color:"#7c5c8a",fontFamily:"'Lora',serif",fontWeight:600}}>View collection →</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        {/* FABRIC */}
+        {tab==="fabrics" && (
+          <div>
+            {selectedCount ? (
+              /* ── Count drill-down view ── */
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:"1rem",marginBottom:"1.5rem",flexWrap:"wrap"}}>
+                  <button onClick={()=>setSelectedCount(null)} style={{background:"none",border:"1.5px solid #d4c2e0",cursor:"pointer",color:"#7c5c8a",display:"flex",alignItems:"center",gap:"0.4rem",fontFamily:"'Lora',serif",fontSize:"0.9rem",fontWeight:600,padding:"0.4rem 0.75rem",borderRadius:"0.5rem"}}>
+                    <Icon name="back" size={16}/> All Counts
+                  </button>
+                  <div style={{flex:1}}>
+                    <h2 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#2d1f3a",fontSize:"1.4rem"}}>{selectedCount.count}ct Fabric</h2>
+                    {selectedCount.notes && <div style={{color:"#8a6e9a",fontSize:"0.78rem"}}>{selectedCount.notes}</div>}
+                  </div>
+                  <div style={{fontSize:"0.8rem",fontFamily:"'Lora',serif",color:"#8a6e9a"}}>
+                    {data.fabrics.filter(f=>f.countId===selectedCount.id).length} piece{data.fabrics.filter(f=>f.countId===selectedCount.id).length!==1?"s":""}
+                  </div>
+                  <Btn small variant="secondary" onClick={()=>setModal({type:"fabricCount",item:selectedCount})}><Icon name="edit" size={13}/>Edit Count</Btn>
+                  <Btn small variant="danger" onClick={()=>{ if(window.confirm("Delete this count and ALL its fabric entries?")){ const d={...data,fabrics:data.fabrics.filter(f=>f.countId!==selectedCount.id),fabricCounts:(data.fabricCounts||[]).filter(c=>c.id!==selectedCount.id)}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{} setSelectedCount(null); }}}><Icon name="trash" size={13}/>Delete Count</Btn>
+                </div>
+                <FabricTable
+                  countRecord={selectedCount}
+                  fabrics={data.fabrics.filter(f=>f.countId===selectedCount.id)}
+                  onAdd={addFabricPiece}
+                  onUpdate={updateFabricPiece}
+                  onDelete={deleteFabricPiece}
+                  onAddToShop={addToShop}
+                />
+              </div>
+            ) : (
+              /* ── Count list view ── */
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:"1rem",marginBottom:"1.5rem",flexWrap:"wrap"}}>
+                  <div style={{flex:1,minWidth:160}}>
+                    <h2 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#2d1f3a",fontSize:"1.4rem"}}>Fabric Stash</h2>
+                    <div style={{color:"#8a6e9a",fontSize:"0.78rem"}}>
+                      {(data.fabricCounts||[]).length} count{(data.fabricCounts||[]).length!==1?"s":""} · {data.fabrics.length} piece{data.fabrics.length!==1?"s":""}
+                    </div>
+                  </div>
+                  <Btn onClick={()=>setModal({type:"fabricCount"})}><Icon name="plus" size={14}/>Add Fabric Count</Btn>
+                </div>
+                {(data.fabricCounts||[]).length === 0
+                  ? <EmptyState emoji="🪡" title="No fabric counts yet" sub="Add a count like 14ct, 28ct, or 32ct to start organising your stash."/>
+                  : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:"1rem"}}>
+                      {[...(data.fabricCounts||[])].sort((a,b)=>(parseInt(a.count)||0)-(parseInt(b.count)||0)).map(fc => {
+                        const pieces = data.fabrics.filter(f=>f.countId===fc.id);
+                        const types = [...new Set(pieces.map(f=>f.type).filter(Boolean))];
+                        return (
+                          <div key={fc.id} onClick={()=>setSelectedCount(fc)}
+                            style={{background:"#fefcfa",border:"1.5px solid #e2d4e8",borderRadius:"1rem",padding:"1.25rem 1.4rem",cursor:"pointer",transition:"all 0.15s",boxShadow:"0 2px 8px rgba(100,70,130,0.07)",textAlign:"center"}}
+                            onMouseEnter={e=>{e.currentTarget.style.borderColor="#c4a8d4";e.currentTarget.style.boxShadow="0 4px 16px rgba(100,70,130,0.14)";e.currentTarget.style.transform="translateY(-2px)";}}
+                            onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2d4e8";e.currentTarget.style.boxShadow="0 2px 8px rgba(100,70,130,0.07)";e.currentTarget.style.transform="none";}}>
+                            <div style={{fontFamily:"'Playfair Display',serif",fontSize:"2.2rem",fontWeight:700,color:"#4a3550",lineHeight:1}}>{fc.count}<span style={{fontSize:"1rem",color:"#8a6e9a"}}>ct</span></div>
+                            <div style={{marginTop:"0.6rem",display:"flex",justifyContent:"center",gap:"0.5rem",flexWrap:"wrap"}}>
+                              <Badge color="#7c5c8a">{pieces.length} piece{pieces.length!==1?"s":""}</Badge>
+                            </div>
+                            {types.length > 0 && (
+                              <div style={{marginTop:"0.6rem",fontSize:"0.76rem",color:"#8a6e9a",fontFamily:"'Lora',serif"}}>
+                                {types.slice(0,3).join(" · ")}{types.length>3?" …":""}
+                              </div>
+                            )}
+                            {fc.notes && <div style={{marginTop:"0.4rem",fontSize:"0.75rem",color:"#8a6e9a",fontStyle:"italic"}}>{fc.notes}</div>}
+                            <div style={{marginTop:"0.75rem",fontSize:"0.78rem",color:"#7c5c8a",fontFamily:"'Lora',serif",fontWeight:600}}>
+                              View stash →
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                }
+              </div>
+            )}
+          </div>
+        )}
+        {/* FLOSS */}
+        {tab==="flosses" && (
+          <div>
+            {selectedBrand ? (
+              /* ── Brand drill-down view ── */
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:"1rem",marginBottom:"1.5rem",flexWrap:"wrap"}}>
+                  <button onClick={()=>setSelectedBrand(null)} style={{background:"none",border:"1.5px solid #d4c2e0",cursor:"pointer",color:"#7c5c8a",display:"flex",alignItems:"center",gap:"0.4rem",fontFamily:"'Lora',serif",fontSize:"0.9rem",fontWeight:600,padding:"0.4rem 0.75rem",borderRadius:"0.5rem"}}>
+                    <Icon name="back" size={16}/> All Brands
+                  </button>
+                  <div style={{flex:1}}>
+                    <h2 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#2d1f3a",fontSize:"1.4rem"}}>{selectedBrand.name}</h2>
+                    {selectedBrand.designer && <div style={{color:"#8a6e9a",fontSize:"0.78rem"}}>{selectedBrand.designer}</div>}
+                  </div>
+                  <div style={{color:"#8a6e9a",fontSize:"0.78rem",fontFamily:"'Lora',serif"}}>
+                    {data.flosses.filter(f=>f.brandId===selectedBrand.id).length} color{data.flosses.filter(f=>f.brandId===selectedBrand.id).length!==1?"s":""}
+                    {data.flosses.filter(f=>f.brandId===selectedBrand.id&&f.lowStock).length > 0 &&
+                      <span style={{marginLeft:"0.5rem",color:"#e65100",fontWeight:600}}>· {data.flosses.filter(f=>f.brandId===selectedBrand.id&&f.lowStock).length} low stock</span>}
+                  </div>
+                  <Btn small variant="secondary" onClick={()=>setModal({type:"brand",item:selectedBrand})}><Icon name="edit" size={13}/>Edit Brand</Btn>
+                  <Btn small variant="danger" onClick={()=>{ if(window.confirm("Delete this brand and ALL its floss entries?")){ deleteItem("flossBrands",selectedBrand.id); const d={...data,flosses:data.flosses.filter(f=>f.brandId!==selectedBrand.id),flossBrands:data.flossBrands.filter(b=>b.id!==selectedBrand.id)}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{} setSelectedBrand(null); }}}><Icon name="trash" size={13}/>Delete Brand</Btn>
+                </div>
+                <FlossTable
+                  brand={selectedBrand}
+                  flosses={data.flosses.filter(f=>f.brandId===selectedBrand.id)}
+                  onAdd={addFloss}
+                  onUpdate={updateFloss}
+                  onDelete={deleteFloss}
+                  onAddToShop={addToShop}
+                />
+              </div>
+            ) : (
+              /* ── Brand list view ── */
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:"1rem",marginBottom:"1.5rem",flexWrap:"wrap"}}>
+                  <div style={{flex:1,minWidth:160}}>
+                    <h2 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#2d1f3a",fontSize:"1.4rem"}}>Floss Stash</h2>
+                    <div style={{color:"#8a6e9a",fontSize:"0.78rem"}}>
+                      {(data.flossBrands||[]).length} brand{(data.flossBrands||[]).length!==1?"s":""} · {data.flosses.length} color{data.flosses.length!==1?"s":""}
+                      {data.flosses.filter(f=>f.lowStock).length > 0 && <span style={{marginLeft:"0.5rem",color:"#e65100",fontWeight:600}}>· {data.flosses.filter(f=>f.lowStock).length} low stock ⚠️</span>}
+                    </div>
+                  </div>
+                  <Btn onClick={()=>setModal({type:"brand"})}><Icon name="plus" size={14}/>Add Brand</Btn>
+                </div>
+                {(data.flossBrands||[]).length === 0
+                  ? <EmptyState emoji="🧵" title="No brands yet" sub="Add a brand like DMC, Anchor, or Weeks Dye Works to get started."/>
+                  : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:"1rem"}}>
+                      {(data.flossBrands||[]).map(brand => {
+                        const brandFlosses = data.flosses.filter(f=>f.brandId===brand.id);
+                        const lowCount = brandFlosses.filter(f=>f.lowStock).length;
+                        const totalSkeins = brandFlosses.reduce((sum,f)=>sum+(parseInt(f.quantity)||0),0);
+                        return (
+                          <div key={brand.id} onClick={()=>setSelectedBrand(brand)}
+                            style={{background:"#fefcfa",border:"1.5px solid #e2d4e8",borderRadius:"1rem",padding:"1.25rem 1.4rem",cursor:"pointer",transition:"all 0.15s",boxShadow:"0 2px 8px rgba(100,70,130,0.07)"}}
+                            onMouseEnter={e=>{e.currentTarget.style.borderColor="#c4a8d4";e.currentTarget.style.boxShadow="0 4px 16px rgba(100,70,130,0.14)";e.currentTarget.style.transform="translateY(-2px)";}}
+                            onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2d4e8";e.currentTarget.style.boxShadow="0 2px 8px rgba(100,70,130,0.07)";e.currentTarget.style.transform="none";}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"0.75rem"}}>
+                              <div>
+                                <div style={{fontFamily:"'Playfair Display',serif",fontSize:"1.1rem",color:"#2d1f3a",fontWeight:600}}>{brand.name}</div>
+                                {brand.designer && <div style={{fontSize:"0.78rem",color:"#8a6e9a",marginTop:"0.15rem"}}>{brand.designer}</div>}
+                              </div>
+                              <div style={{fontSize:"1.6rem",lineHeight:1}}>🧵</div>
+                            </div>
+                            <div style={{display:"flex",gap:"0.6rem",flexWrap:"wrap",marginBottom: brand.notes?"0.6rem":"0"}}>
+                              <Badge color="#7c5c8a">{brandFlosses.length} color{brandFlosses.length!==1?"s":""}</Badge>
+                              <Badge color="#6a8f6a">{totalSkeins} skein{totalSkeins!==1?"s":""}</Badge>
+                              {lowCount > 0 && <Badge color="#e65100">⚠️ {lowCount} low</Badge>}
+                            </div>
+                            {brand.notes && <div style={{fontSize:"0.78rem",color:"#8a6e9a",fontStyle:"italic",marginTop:"0.4rem"}}>{brand.notes}</div>}
+                            <div style={{marginTop:"0.85rem",fontSize:"0.78rem",color:"#7c5c8a",fontFamily:"'Lora',serif",fontWeight:600,display:"flex",alignItems:"center",gap:"0.3rem"}}>
+                              View collection →
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                }
+              </div>
+            )}
+          </div>
+        )}
+        {/* SHOPPING LIST */}
+        {tab==="shopping" && <ShoppingTab shoppingList={data.shoppingList||[]} onSave={(list)=>{ const d={...data,shoppingList:list}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{}; }}/>}
+
+        {/* NOTIONS & TOOLS */}
+        {tab==="notions" && (
+          <div>
+            {selectedNotion ? (
+              /* ── Category drill-down ── */
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:"1rem",marginBottom:"1.5rem",flexWrap:"wrap"}}>
+                  <button onClick={()=>{setSelectedNotion(null);setSearch("");}} style={{background:"none",border:"1.5px solid #d4c2e0",cursor:"pointer",color:"#7c5c8a",display:"flex",alignItems:"center",gap:"0.4rem",fontFamily:"'Lora',serif",fontSize:"0.9rem",fontWeight:600,padding:"0.4rem 0.75rem",borderRadius:"0.5rem"}}>
+                    <Icon name="back" size={16}/> All Categories
+                  </button>
+                  <div style={{flex:1}}>
+                    <h2 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#2d1f3a",fontSize:"1.4rem"}}>
+                      {NOTION_TYPE_EMOJI[selectedNotion]} {selectedNotion}
+                    </h2>
+                    <div style={{color:"#8a6e9a",fontSize:"0.78rem"}}>
+                      {(data.notions||[]).filter(n=>n.notionType===selectedNotion).length} item{(data.notions||[]).filter(n=>n.notionType===selectedNotion).length!==1?"s":""}
+                    </div>
+                  </div>
+                  <SearchBar value={search} onChange={setSearch}/>
+                  <Btn onClick={()=>setModal({type:"notion",notionType:selectedNotion})}><Icon name="plus" size={14}/>Add Item</Btn>
+                </div>
+                {(() => {
+                  const catItems = (data.notions||[]).filter(n=>n.notionType===selectedNotion);
+                  const filtered = catItems.filter(n => {
+                    if (!search) return true;
+                    const s = search.toLowerCase();
+                    return ["brand","description","colorName","colorNumber","pieceType","beadType",
+                      "trimType","frameType","name","color","size","notes","material","needleSize","needleSizeOther"].some(k=>(n[k]||"").toLowerCase().includes(s));
+                  });
+                  if (catItems.length===0) return <EmptyState emoji={NOTION_TYPE_EMOJI[selectedNotion]||"🪡"} title={`No ${selectedNotion} yet`} sub="Click Add Item to start tracking this category."/>;
+                  if (filtered.length===0) return <EmptyState emoji="🔍" title="No items match" sub="Try a different search term."/>;
+                  return (
+                    <div>
+                      {search && <div style={{fontSize:"0.8rem",fontFamily:"'Lora',serif",color:"#8a6e9a",marginBottom:"1rem"}}>{filtered.length} of {catItems.length} item{catItems.length!==1?"s":""}</div>}
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:"1rem"}}>
+                        {filtered.map(n=>(
+                          <NotionItemCard key={n.id} item={n}
+                            onEdit={n=>setModal({type:"notion",item:n,notionType:selectedNotion})}
+                            onDelete={deleteNotion}
+                            onAddToShop={addToShop}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              /* ── Category card grid ── */
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:"1rem",marginBottom:"1.5rem",flexWrap:"wrap"}}>
+                  <div style={{flex:1,minWidth:160}}>
+                    <h2 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#2d1f3a",fontSize:"1.4rem"}}>Notions & Tools</h2>
+                    <div style={{color:"#8a6e9a",fontSize:"0.78rem"}}>
+                      {allNotionTypes.length} categories · {(data.notions||[]).length} item{(data.notions||[]).length!==1?"s":""}
+                    </div>
+                  </div>
+                  <Btn onClick={()=>setModal({type:"notionCategory"})}><Icon name="plus" size={14}/>Add Category</Btn>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:"1rem"}}>
+                  {allNotionTypes.map(type => {
+                    const count = (data.notions||[]).filter(n=>n.notionType===type).length;
+                    const color = NOTION_TYPE_COLOR[type]||"#7c5c8a";
+                    const isCustom = !(NOTION_TYPES_DEFAULT.includes(type));
+                    const customCat = (data.notionCategories||[]).find(c=>c.name===type);
+                    return (
+                      <div key={type} style={{position:"relative"}}>
+                        {isCustom && customCat && (
+                          <button
+                            onClick={e=>{e.stopPropagation();deleteNotionCategory(customCat.id);}}
+                            title="Delete category"
+                            style={{position:"absolute",top:"0.5rem",right:"0.5rem",zIndex:2,background:"#fff0f0",border:"1px solid #f5c6cb",borderRadius:"50%",width:22,height:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#c0392b",fontSize:"0.7rem",lineHeight:1}}>
+                            ✕
+                          </button>
+                        )}
+                        <div onClick={()=>{setSelectedNotion(type);setSearch("");}}
+                          style={{background:"#fefcfa",border:`1.5px solid ${isCustom?"#c4a8d4":"#e2d4e8"}`,borderRadius:"1rem",overflow:"hidden",cursor:"pointer",transition:"all 0.15s",boxShadow:"0 2px 8px rgba(100,70,130,0.07)",height:"100%"}}
+                          onMouseEnter={e=>{e.currentTarget.style.borderColor="#c4a8d4";e.currentTarget.style.boxShadow="0 4px 16px rgba(100,70,130,0.14)";e.currentTarget.style.transform="translateY(-2px)";}}
+                          onMouseLeave={e=>{e.currentTarget.style.borderColor=isCustom?"#c4a8d4":"#e2d4e8";e.currentTarget.style.boxShadow="0 2px 8px rgba(100,70,130,0.07)";e.currentTarget.style.transform="none";}}>
+                          <div style={{height:72,background:`linear-gradient(135deg,${color}22,${color}44)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"2.2rem",borderBottom:"1px solid #e2d4e8"}}>
+                            {NOTION_TYPE_EMOJI[type] || (data.notionCategories||[]).find(c=>c.name===type)?.emoji || "✨"}
+                          </div>
+                          <div style={{padding:"0.9rem 1.1rem"}}>
+                            <div style={{fontFamily:"'Playfair Display',serif",fontSize:"1rem",color:"#2d1f3a",fontWeight:600,marginBottom:"0.4rem"}}>{type}</div>
+                            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                              <Badge color={color}>{count} item{count!==1?"s":""}</Badge>
+                              {isCustom
+                                ? <span style={{fontSize:"0.7rem",color:"#b89ac8",fontFamily:"'Lora',serif",fontStyle:"italic"}}>custom</span>
+                                : <span style={{fontSize:"0.78rem",color:"#7c5c8a",fontFamily:"'Lora',serif",fontWeight:600}}>View →</span>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        {/* WISHLIST */}
+        {tab==="wishlist" && (
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:"1rem",marginBottom:"1.5rem",flexWrap:"wrap"}}>
+              <div style={{flex:1,minWidth:160}}><h2 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#2d1f3a",fontSize:"1.4rem"}}>Wish List</h2><div style={{color:"#8a6e9a",fontSize:"0.78rem"}}>{data.wishlist.length} item{data.wishlist.length!==1?"s":""} on your list</div></div>
+              <SearchBar value={search} onChange={setSearch}/>
+              <Btn onClick={()=>setModal({type:"wish"})}><Icon name="plus" size={14}/>Add Item</Btn>
+            </div>
+            {filter(data.wishlist,["item","designer","category"]).length===0
+              ? <EmptyState emoji="💝" title="Wish list is empty" sub="Save charts, floss, finishing pieces & more."/>
+              : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:"1rem"}}>
+                  {filter(data.wishlist,["item","designer","category"]).map(w=>(
+                    <div key={w.id} style={{background:"#fefcfa",border:"1.5px solid #e2d4e8",borderRadius:"0.75rem",padding:"1.1rem",boxShadow:"0 2px 8px rgba(100,70,130,0.07)"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"0.6rem"}}>
+                        <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:"1rem",color:"#2d1f3a",margin:0,flex:1}}>{w.item||"Unnamed"}</h3>
+                        <div style={{display:"flex",gap:"0.4rem",marginLeft:"0.5rem"}}>
+                          <button onClick={()=>setModal({type:"wish",item:w})} style={{background:"none",border:"none",cursor:"pointer",color:"#8a6e9a",padding:"2px"}}><Icon name="edit" size={14}/></button>
+                          <button onClick={()=>deleteItem("wishlist",w.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#c0392b",padding:"2px"}}><Icon name="trash" size={14}/></button>
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:"0.5rem",flexWrap:"wrap",marginBottom:"0.5rem"}}>
+                        <Badge color="#7c5c8a">{w.category}</Badge>
+                        {w.priority && <Badge color={priorityColor[w.priority]||"#7c5c8a"}>{w.priority}</Badge>}
+                      </div>
+                      {w.designer && <div style={{fontSize:"0.82rem",fontFamily:"'Lora',serif",color:"#5a4060"}}><span style={{color:"#8a6e9a"}}>Designer: </span>{w.designer}</div>}
+                      {w.price && <div style={{fontSize:"0.82rem",fontFamily:"'Lora',serif",color:"#5a4060"}}><span style={{color:"#8a6e9a"}}>Price: </span>{w.price}</div>}
+                      {w.link && <div style={{fontSize:"0.82rem",fontFamily:"'Lora',serif",color:"#5a4060",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}><span style={{color:"#8a6e9a"}}>Where: </span>{w.link}</div>}
+                      {w.notes && <div style={{marginTop:"0.6rem",fontSize:"0.82rem",fontFamily:"'Lora',serif",color:"#6a5078",fontStyle:"italic",borderTop:"1px dashed #ddc8ea",paddingTop:"0.5rem"}}>{w.notes}</div>}
+                    </div>
+                  ))}
+                </div>}
+          </div>
+        )}
+
+        {/* CALCULATOR */}
+        {tab==="calculator" && (
+          <div style={{maxWidth:680,margin:"0 auto"}}>
+            <FabricCalculator/>
+          </div>
+        )}
+
+      </main>
+
+      {/* Modals */}
+      {progressModal && <Modal title={`Progress — ${progressModal.title||"Project"}`} onClose={()=>setProgressModal(null)} wide><ProgressModal p={progressModal} onSave={(updated)=>{ updateItem("projects",updated); setProgressModal({...updated}); }} onClose={()=>setProgressModal(null)}/></Modal>}
+      {modal?.type==="project"  && <Modal title={modal.item?"Edit Project":"New Project"} onClose={()=>setModal(null)} wide><ProjectForm initial={modal.item||(modal.preset?{status:modal.preset}:{})} onSave={(f)=>{ if(modal.item?.id){updateItem("projects",{...modal.item,...f});}else{handleSave("projects",f);} setModal(null); }} onClose={()=>setModal(null)}/></Modal>}
+      {modal?.type==="designer"  && <Modal title={modal.item?"Edit Designer":"Add Designer"} onClose={()=>setModal(null)}><DesignerForm initial={modal.item} onSave={(f)=>{ if(modal.item?.id){ updateItem("chartDesigners",{...modal.item,...f}); setSelectedDesigner(d=>d&&d.id===modal.item.id?{...d,...f}:d); } else { const nd={...f,id:Math.random().toString(36).slice(2)+Date.now().toString(36),createdAt:new Date().toISOString()}; const d={...data,chartDesigners:[...(data.chartDesigners||[]),nd]}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{} } setModal(null); }} onClose={()=>setModal(null)}/></Modal>}
+      {modal?.type==="chart"     && <Modal title={modal.item?"Edit Chart":"Add Chart"} onClose={()=>setModal(null)} wide><ChartForm initial={modal.item} designerName={(data.chartDesigners||[]).find(d=>d.id===(modal.designerId||modal.item?.designerId))?.name||""} onSave={(f)=>{ const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36); if(modal.item?.id){ updateChart({...modal.item,...f}); } else { addChart({...f,designerId:modal.designerId,id:uid(),createdAt:new Date().toISOString()}); } setModal(null); }} onClose={()=>setModal(null)}/></Modal>}
+      {modal?.type==="fabricCount" && <Modal title={modal.item?"Edit Fabric Count":"Add Fabric Count"} onClose={()=>setModal(null)}><FabricCountForm initial={modal.item} onSave={(f)=>{ if(modal.item?.id){ updateItem("fabricCounts",{...modal.item,...f}); setSelectedCount(c=>c&&c.id===modal.item.id?{...c,...f}:c); } else { const nc={...f,id:Math.random().toString(36).slice(2)+Date.now().toString(36),createdAt:new Date().toISOString()}; const d={...data,fabricCounts:[...(data.fabricCounts||[]),nc]}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{} } setModal(null); }} onClose={()=>setModal(null)}/></Modal>}
+      {modal?.type==="brand"    && <Modal title={modal.item?"Edit Brand":"Add Brand"} onClose={()=>setModal(null)}><BrandForm initial={modal.item} onSave={(f)=>{ if(modal.item?.id){updateItem("flossBrands",{...modal.item,...f}); setSelectedBrand(b=>b&&b.id===modal.item.id?{...b,...f}:b);} else { const nb={...f,id:Math.random().toString(36).slice(2)+Date.now().toString(36),createdAt:new Date().toISOString()}; const d={...data,flossBrands:[...(data.flossBrands||[]),nb]}; setData(d); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{} } setModal(null); }} onClose={()=>setModal(null)}/></Modal>}
+      {modal?.type==="notionCategory" && <Modal title="Add Category" onClose={()=>setModal(null)}><NotionCategoryForm existingNames={allNotionTypes} onSave={(name,emoji)=>{ addNotionCategory(name,emoji); setModal(null); }} onClose={()=>setModal(null)}/></Modal>}
+      {modal?.type==="notion"   && <Modal title={modal.item?`Edit ${modal.item.notionType||"Item"}`:`Add ${modal.notionType||"Item"}`} onClose={()=>setModal(null)} wide><NotionForm initial={modal.item||{}} notionType={modal.notionType||modal.item?.notionType||"Needles"} onSave={(f)=>{ if(modal.item?.id){updateNotion({...modal.item,...f});}else{addNotion({...f,notionType:modal.notionType||f.notionType});} setModal(null); }} onClose={()=>setModal(null)}/></Modal>}
+      {modal?.type==="wish"     && <Modal title={modal.item?"Edit Item":"Add to Wish List"} onClose={()=>setModal(null)}><WishlistForm initial={modal.item} onSave={handleSave("wishlist")} onClose={()=>setModal(null)}/></Modal>}
+
+      <footer style={{textAlign:"center",padding:"2rem",color:"#8a6e9a",fontSize:"0.76rem",fontFamily:"'Lora',serif",fontStyle:"italic",borderTop:"1px solid #e2d4e8",marginTop:"2rem"}}>
+        StitchKeeper — Made with love for stitchers everywhere 🧵
+      </footer>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(App));
+    </script>
   </body>
 </html>
